@@ -1,0 +1,37 @@
+name: navidrome-mcp
+
+services:
+  navidrome-mcp:
+    build:
+      context: .
+      target: runtime
+    image: navidrome-mcp:local
+    init: true
+    stdin_open: true
+    tty: false
+    restart: 'no'
+    environment:
+      NAVIDROME_URL: ${NAVIDROME_URL:?Set NAVIDROME_URL in .env}
+      NAVIDROME_USERNAME: ${NAVIDROME_USERNAME:?Set NAVIDROME_USERNAME in .env}
+      NAVIDROME_PASSWORD: ${NAVIDROME_PASSWORD:?Set NAVIDROME_PASSWORD in .env}
+      # Always keep SQLite and its journals in the persistent container volume.
+      NAVIDROME_DB_PATH: /data/playlists.sqlite
+      NAVIDROME_REQUIRE_APPROVAL: ${NAVIDROME_REQUIRE_APPROVAL:-false}
+      NAVIDROME_TIMEOUT_MS: ${NAVIDROME_TIMEOUT_MS:-15000}
+      NAVIDROME_SEARCH_PAGE_SIZE: ${NAVIDROME_SEARCH_PAGE_SIZE:-100}
+      NAVIDROME_SEARCH_MAX_PAGES: ${NAVIDROME_SEARCH_MAX_PAGES:-20}
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    volumes:
+      - playlist-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 15s
+
+volumes:
+  playlist-data:

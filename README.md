@@ -1,266 +1,119 @@
 # Navidrome MCP
 
-A local MCP service that lets external agents turn explicit song lists into
-ordered Navidrome playlists. It matches library tracks, stores versioned drafts,
-previews them, and journals publishing so uncertain writes are not blindly retried.
+Create ordered Navidrome playlists from song lists through a local MCP client.
+The service matches tracks, saves drafts, previews changes, and records publishing
+outcomes. It connects to an existing Navidrome instance using MCP over stdio.
 
-The first version serves one user and one Navidrome account. It creates new
-playlists through MCP over stdio; the agent supplies the conversational interface.
-There is no browser UI, embedded model, HTTP listener, or existing-playlist editor.
+## Docker Compose
 
-## Install and build
-
-Use Node **26.13.0 LTS** (pinned in `.nvmrc`) and pnpm. SQLite uses Drizzle ORM
-with the native `better-sqlite3` driver. Supported platforms use its bundled
-native binaries; other platforms may require a compatible native build.
+Requires Docker with Compose.
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm build
+cp .env.docker.example .env
+# Edit .env with your Navidrome URL, username, and Subsonic password.
+chmod 600 .env
+docker compose build
 ```
 
-Configure the variables below in your MCP client's process environment. For a
-direct launch, copy `.env.example` to the ignored `.env` file, fill it in, and use:
+Keep your existing `.env` if already configured. For Navidrome on the Docker host,
+use `http://host.docker.internal:4533`; Navidrome must listen on an interface the
+container can reach. Single-quote passwords containing `$` or `#` in `.env`.
 
-```sh
-node --env-file=.env dist/cli.js
-```
-
-The process reads environment variables; it does not load `.env` automatically.
-It speaks MCP on stdin/stdout, so a direct launch waits for an MCP client.
-
-## Configuration
-
-| Variable                     | Meaning                                                          | Default                                              |
-| ---------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------- |
-| `NAVIDROME_URL`              | Required server base URL, including any reverse-proxy prefix     | None                                                 |
-| `NAVIDROME_USERNAME`         | Required Navidrome username                                      | None                                                 |
-| `NAVIDROME_PASSWORD`         | Required password usable for Subsonic token/salt authentication  | None                                                 |
-| `NAVIDROME_DB_PATH`          | SQLite file; use an absolute path in MCP configuration           | `.data/playlists.sqlite` under the working directory |
-| `NAVIDROME_REQUIRE_APPROVAL` | Require an agent assertion of human approval (`true` or `false`) | `false`                                              |
-| `NAVIDROME_TIMEOUT_MS`       | Per-request timeout, 100–60000 milliseconds                      | `15000`                                              |
-| `NAVIDROME_SEARCH_PAGE_SIZE` | Search page size, 1–500                                          | `100`                                                |
-| `NAVIDROME_SEARCH_MAX_PAGES` | Maximum pages per search, 1–100                                  | `20`                                                 |
-
-Use an HTTP(S) base URL without embedded credentials, query, or fragment. Do not
-append `/rest`. Authentication derives a fresh Subsonic token and salt from the
-configured password for each request. Instance-specific authentication settings
-must permit that method. Redirects are rejected; configure the final server URL.
-
-Credentials remain in the service process. Tool schemas do not accept them, and
-results contain neither credentials nor raw upstream errors or library file paths.
-Stdout is reserved for MCP. Startup diagnostics go to stderr without raw errors.
-`.env`, build output, dependencies, and SQLite files are ignored by Git.
-
-The database is bound to the configured server URL and username, preventing
-accidental recovery against another account. Password rotation does not change
-that binding. Use a separate database when changing server or account. SQLite
-files are created with owner-only permissions; keep the database and its journal
-files together and retain them across launches.
-
-## Connect an MCP client
-
-Build first, then use your client's equivalent of this configuration. Replace
-paths, URL, username, and password with your actual local settings; the URL below
-is an example, not a detected instance.
+Add this to your MCP client's configuration, replacing the absolute paths:
 
 ```json
 {
   "mcpServers": {
     "navidrome": {
-      "command": "node",
-      "args": ["/absolute/path/to/navidrome-mcp/dist/cli.js"],
-      "env": {
-        "NAVIDROME_URL": "http://localhost:4533",
-        "NAVIDROME_USERNAME": "your-user",
-        "NAVIDROME_PASSWORD": "your-password",
-        "NAVIDROME_DB_PATH": "/absolute/path/to/navidrome-mcp/.data/playlists.sqlite"
-      }
+      "command": "docker",
+      "args": [
+        "compose",
+        "--project-directory",
+        "/absolute/path/to/navidrome-mcp",
+        "--file",
+        "/absolute/path/to/navidrome-mcp/compose.yaml",
+        "--env-file",
+        "/absolute/path/to/navidrome-mcp/.env",
+        "run",
+        "--rm",
+        "-T",
+        "navidrome-mcp"
+      ]
     }
   }
 }
 ```
 
-Use the client's secret environment injection when available. Cloud agents need a
-local connector capable of launching this command; they cannot reach your
-localhost directly. This version provides no network MCP transport.
+For a manual foreground launch:
 
-## Tools
-
-| Tool                  | Input and behavior                                                                                                |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `check_connection`    | `{}`; checks connectivity and authentication                                                                      |
-| `search_tracks`       | `{query}`; returns tracks and a `complete` flag                                                                   |
-| `resolve_tracks`      | `{songs: [{title, artist, album?, version?, duration?}]}`; one resolution per input occurrence                    |
-| `list_playlists`      | `{}`; lists IDs and metadata; duplicate names are permitted                                                       |
-| `get_playlist`        | `{playlistId}`; returns ordered tracks and visibility                                                             |
-| `save_playlist_draft` | `{name, visibility?, entries, draftId?, expectedRevision?}`; creates or replaces a complete draft revision        |
-| `get_playlist_draft`  | `{draftId, revision?}`; reads the current or a historical revision                                                |
-| `copy_playlist_draft` | `{draftId, revision, name?}`; creates a separate editable draft                                                   |
-| `preview_playlist`    | `{draftId, revision}`; presents and records the exact current revision                                            |
-| `publish_playlist`    | `{draftId, revision, operationKey, approval?}`; starts once or returns the existing operation                     |
-| `get_operation`       | `{operationId}`; reads progress, outcome, and recovery version                                                    |
-| `reconcile_operation` | `{operationId, action, recoveryKey, expectedRecoveryVersion, playlistId?, reason?}`; performs deliberate recovery |
-
-A draft entry is `{request: {title, artist, album?, version?, duration?}, trackId?}`
-or `{request: {...}, omit: true}`. Without a selection or omission, the service
-attempts automatic resolution. It fetches all explicitly selected IDs from
-Navidrome and stores its own metadata snapshot. Repeated entries stay separate.
-
-Saving an existing draft requires both `draftId` and `expectedRevision`. This is
-a full replacement: include the desired name, visibility, and complete ordered
-entries, including omissions. Visibility defaults to **public** when omitted.
-Every edit creates a new revision and invalidates the previous preview.
-
-Expected problems return structured results such as:
-
-```json
-{ "status": "stale_revision", "message": "Reload the current draft before editing." }
+```sh
+docker compose run --rm -T navidrome-mcp
 ```
 
-Successful tool execution returns `{"status":"ok","data":...}`. For publishing,
-**inspect `data.status`**: it describes the durable operation and may be `creating`,
-`unknown_outcome`, `incomplete`, `verification_failed`, or `succeeded`. An `ok`
-tool result alone does not mean a playlist was successfully published.
+The service waits for MCP messages on stdin. Use `compose run` for each client
+connection; `compose up -d` provides no MCP endpoint.
 
-## Workflow example
+## Local setup
 
-1. Call `check_connection`, then `resolve_tracks` with structured requested songs.
-2. Review `selected`, `ambiguous`, `missing`, or `incomplete` results. Ask the user
-   to choose uncertain recordings or explicitly omit a request. Revise the request
-   when necessary; never silently substitute or drop a song.
-3. Save the ordered draft. For example:
+Requires Node **26.13.0** (see `.nvmrc`) and pnpm.
 
-   ```json
-   {
-     "name": "Evening",
-     "visibility": "public",
-     "entries": [
-       {
-         "request": { "title": "Teardrop", "artist": "Massive Attack" },
-         "trackId": "actual-library-id"
-       },
-       { "request": { "title": "Unavailable song", "artist": "Artist" }, "omit": true }
-     ]
-   }
-   ```
+```sh
+pnpm install --frozen-lockfile
+pnpm build
+cp .env.example .env
+# Edit .env with your Navidrome credentials and an absolute NAVIDROME_DB_PATH.
+node --env-file=.env dist/cli.js
+```
 
-4. Preview with the returned `draftId` and `revision`. Review the name, visibility,
-   selected tracks, order, repeated occurrences, and explicit omissions.
-5. Publish that exact revision with a stable `operationKey`. When confirmation is
-   enabled, also send `approval: {revision: 1, confirmed: true}`, using the actual
-   revision approved by the user. This trusts the agent's assertion; it is not an
-   independently authenticated human approval channel.
-6. Inspect the operation status and retain its ID. Poll `get_operation` if needed.
+For an MCP client, use `node` as the command and pass
+`--env-file=/absolute/path/to/.env` and `/absolute/path/to/dist/cli.js` as arguments.
 
-Publishing rejects stale or unpreviewed revisions, unresolved entries, and empty
-results before writing. It revalidates selected track metadata against the preview.
-A library change requires saving and previewing a new revision.
+## Configuration
 
-Once creation may have begun, the draft locks. Repeated publication requests,
-including alternate keys, return the same operation. Keys cannot be reused for
-another draft or revision. Copy the draft to intentionally create another playlist.
+Required: `NAVIDROME_URL`, `NAVIDROME_USERNAME`, and `NAVIDROME_PASSWORD`.
+Use the server's HTTP(S) base URL without `/rest` or embedded credentials.
 
-## Matching limits
+Optional settings, including request timeouts and search limits, are listed in
+[.env.example](.env.example). Set `NAVIDROME_REQUIRE_APPROVAL=true` to require an
+agent assertion that the user approved the exact preview revision. Keep credentials
+in the process environment or `.env`, outside tool arguments.
 
-Matching uses direct paginated Navidrome searches, conservative Unicode/case/
-punctuation normalization, and title/artist comparisons. Optional album and
-version constraints narrow candidates; a supplied duration must be within two
-seconds. Parenthesized and dash-separated suffixes remain distinct; a neutral title with studio
-and live candidates is ambiguous. A sole versioned alternative is not silently
-substituted for an unqualified exact title.
+## Workflow
 
-Search behavior depends on Navidrome's backend and library tags. Completeness
-means pagination finished for that query, not that the entire library was proven
-to contain no other spelling or tagging variants. Reaching a page limit reports
-`incomplete` and prevents automatic selection or a false missing result. The agent
-may search again and explicitly choose a valid library ID. No external music
-catalogue, audio analysis, or mood inference is used.
+1. Call `check_connection`, then `resolve_tracks` with songs containing `title` and
+   `artist` (optionally `album`, `version`, and `duration`).
+2. Review matches. Explicitly select ambiguous tracks or omit unwanted entries;
+   missing or incomplete searches must not be silently treated as resolved.
+3. Use `save_playlist_draft`, then `preview_playlist`. Drafts default to public;
+   set `visibility: "private"` when needed.
+4. Call `publish_playlist` with the previewed revision and a stable `operationKey`.
+   Check `data.status`: only `succeeded` confirms publication.
 
-## Publishing and recovery
+Publishing creates a new playlist. Repeated requests return the recorded operation;
+use `copy_playlist_draft` to intentionally create another playlist.
 
-Creation, setting visibility, and verification are separate Navidrome requests.
-The service verifies name, ordered IDs (including repetitions), and visibility
-after writing. The server's initial visibility may differ briefly from the desired
-setting. A visibility failure remains incomplete with the known playlist ID.
-Content/order mismatch reports `verification_failed` with differences and retains
-the playlist; it never automatically deletes or rewrites its contents.
+For incomplete operations, inspect `get_operation` and use `reconcile_operation`.
+Resume a known playlist ID; an `unknown_outcome` requires explicitly adopting a
+verified playlist or confirming non-creation before retrying. A new operation key
+cannot bypass recovery.
 
-There is no server idempotency key for new playlist creation. A lost response or
-crash without a recorded playlist ID therefore becomes `unknown_outcome` and
-blocks further creation. Names are not proof of identity or non-creation.
+## Storage and upgrades
 
-Operations use durable worker leases so separate MCP processes sharing the same
-database do not create concurrently. After an abrupt crash, wait for the lease
-to expire (`3 * NAVIDROME_TIMEOUT_MS + 10000` milliseconds from the last recorded
-step); an active worker returns `operation_busy` to recovery requests.
+Docker stores SQLite in the `playlist-data` volume at `/data/playlists.sqlite`.
+Local runs default to `.data/playlists.sqlite`. Keep the same server URL and
+username for an existing database; host databases are not automatically imported
+into Docker.
 
-Read `get_operation` before deciding how to reconcile. Every recovery decision
-requires a stable `recoveryKey` and the current `expectedRecoveryVersion`. An
-accepted decision increments `recoveryVersion` and is recorded durably. Repeating
-the same decision key returns the recorded operation without running it again.
-To make another deliberate decision after a failed attempt, inspect the new
-version and use a new key.
-
-- **Known ID, incomplete or failed verification:** use `action: "resume"` to
-  retry visibility and verification without another creation. Content mismatch
-  remains a failure until the actual playlist matches; resume does not rewrite it.
-- **Unknown outcome, identified playlist:** use `action: "adopt"`, supply
-  `playlistId` and `reason`. The service checks name and ordered track IDs before
-  adopting, then applies visibility and completes verification.
-- **Unknown outcome, confirmed non-creation:** use `action: "confirm_not_created"`
-  with an explicit assertion in `reason`. The service revalidates the stored
-  selection, records the decision, and authorizes one further creation attempt.
-
-Recovery decisions are trusted agent/operator assertions. The service cannot
-prove non-creation, and an incorrect assertion can cause a duplicate. A new
-publication key alone never bypasses an unknown outcome.
+Pending database migrations run automatically at startup in one transaction.
+Failure rolls back the migration and stops startup. Before upgrading, stop clients
+and back up the database, then rebuild with `docker compose build --pull` and
+reconnect. Retain the volume: `docker compose down --volumes` deletes stored state.
+Rollback requires restoring the pre-upgrade backup.
 
 ## Development
 
 ```sh
 pnpm check             # formatting, lint, typecheck, build, all tests
-pnpm test:integration  # fast public-service tests
 pnpm test:watch        # integration tests while editing
-pnpm test:coverage     # V8 coverage and HTML report
+pnpm test:coverage     # coverage report
 ```
-
-Tests exercise the public service against real SQLite and a local fake Navidrome
-HTTP server, plus real MCP clients and subprocesses over stdio. They cover lost
-responses, restarted services, concurrent processes, and killed workers. They do
-not contact or validate your actual Navidrome instance. The test environment must
-permit ephemeral loopback sockets and local subprocesses.
-
-The agreed spec lives in `.scratch/playlist-service/spec.md`; domain vocabulary
-is in `GLOSSARY.md`, with architectural decisions in `docs/adr/`.
-
-Source modules live in `src/playlists/` (matching, drafts, publication and tool
-contracts), `src/database/` (Drizzle queries and migrations), `src/navidrome/`
-(upstream adapter), and `src/mcp/` (tool registration). `src/app.ts` constructs
-and injects dependencies; `src/cli.ts` owns stdio and process lifetime.
-
-Vitest projects separate `tests/integration/` from `tests/e2e/`. Both use shared
-fixtures in `tests/support/`. End-to-end tests run the compiled CLI; `pnpm test`
-and `pnpm test:coverage` build it first. Coverage instruments the source imported
-by integration tests; the separate CLI subprocesses are behaviorally tested but
-are not instrumented in that report. The crash test waits for the durable lease
-rather than shortening production recovery semantics.
-
-### Database upgrades
-
-Stop every process using the database and take a SQLite backup before upgrading.
-On startup the application applies committed SQL files from `drizzle/` in a
-single immediate transaction and records their versions in `schema_migrations`.
-The initial migration accepts the original unversioned schema and preserves
-existing revisions, previews, locks, operation keys, worker leases, and recovery
-history. The second migration exposes operational state in typed columns while
-retaining validated JSON snapshots. Startup fails if a migration fails or the
-schema is newer than the application. A failed transaction leaves schema and
-version records unchanged.
-
-Deploy `drizzle/` alongside `dist/` and `node_modules/`; SQL paths resolve relative
-to the application, independent of the launch directory. Add numbered SQL files
-and update the migration list in `src/database/migrate.ts` for future changes;
-update the typed schema and add public-service upgrade coverage in the same
-change. Review SQL before release. An older application cannot safely open the
-upgraded schema: rollback requires restoring the pre-upgrade backup.

@@ -1,0 +1,10 @@
+# Send only build inputs; credentials, local databases and agent state stay local.
+**
+!package.json
+!pnpm-lock.yaml
+!tsconfig.json
+!tsconfig.build.json
+!src/
+!src/**
+!drizzle/
+!drizzle/**
