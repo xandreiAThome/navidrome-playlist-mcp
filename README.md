@@ -1,4 +1,4 @@
-# Navidrome MCP
+# Navidrome Playlist MCP
 
 Let your AI assistant create and extend playlists in your Navidrome library.
 Connect it to an MCP client, then ask for what you want:
@@ -52,13 +52,13 @@ that override, omit its `--file` argument and path.
       "args": [
         "compose",
         "--project-directory",
-        "/absolute/path/to/navidrome-mcp",
+        "/absolute/path/to/navidrome-playlist-mcp",
         "--file",
-        "/absolute/path/to/navidrome-mcp/compose.yaml",
+        "/absolute/path/to/navidrome-playlist-mcp/compose.yaml",
         "--file",
-        "/absolute/path/to/navidrome-mcp/compose.override.yaml",
+        "/absolute/path/to/navidrome-playlist-mcp/compose.override.yaml",
         "--env-file",
-        "/absolute/path/to/navidrome-mcp/.env",
+        "/absolute/path/to/navidrome-playlist-mcp/.env",
         "run",
         "--rm",
         "-T",
@@ -91,7 +91,10 @@ Fill in your Navidrome credentials and set `NAVIDROME_DB_PATH` to an absolute pa
 For your MCP client, use `node` as the command with these arguments:
 
 ```json
-["--env-file=/absolute/path/to/navidrome-mcp/.env", "/absolute/path/to/navidrome-mcp/dist/cli.js"]
+[
+  "--env-file=/absolute/path/to/navidrome-playlist-mcp/.env",
+  "/absolute/path/to/navidrome-playlist-mcp/dist/cli.js"
+]
 ```
 
 ## Want recommendations?

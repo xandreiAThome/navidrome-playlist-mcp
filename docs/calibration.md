@@ -189,7 +189,7 @@ jq -n \
 Add its absolute path to `.env`:
 
 ```dotenv
-AUDIOMUSE_CALIBRATION_PATH=/absolute/path/to/navidrome-mcp/.data/audiomuse-calibration.json
+AUDIOMUSE_CALIBRATION_PATH=/absolute/path/to/navidrome-playlist-mcp/.data/audiomuse-calibration.json
 ```
 
 For Docker, the file must be mounted into the container. Create
@@ -205,7 +205,7 @@ services:
 ```
 
 The MCP configuration in the README passes an explicit `--file`. Add another
-`--file` argument for `/absolute/path/to/navidrome-mcp/compose.override.yaml`
+`--file` argument for `/absolute/path/to/navidrome-playlist-mcp/compose.override.yaml`
 after the existing Compose file argument so this mount is included.
 
 ## 6. Verify through the service

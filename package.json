@@ -1,5 +1,5 @@
 {
-  "name": "navidrome-mcp",
+  "name": "navidrome-playlist-mcp",
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@12.18.0",
@@ -8,6 +8,7 @@
   "engines": {
     "node": ">=26.13.0"
   },
+  "license": "MIT",
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env src/cli.ts",
     "build": "tsc -p tsconfig.build.json",
