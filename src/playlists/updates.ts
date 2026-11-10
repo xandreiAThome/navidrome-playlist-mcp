@@ -1,6 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { Problem, targetSchema } from './domain.ts';
-import type { Config, Draft, Entry, RemotePlaylist, ToolInput, UpdateOperation } from './domain.ts';
+import type {
+  Config,
+  Draft,
+  Entry,
+  RemotePlaylist,
+  ToolInput,
+  UpdateOperation,
+  UpdateComparison,
+} from './domain.ts';
 import type { Storage } from '../database/storage.ts';
 import type { Navidrome } from '../navidrome/client.ts';
 import { match } from './matching.ts';
@@ -11,6 +19,62 @@ const same = (a: RemotePlaylist, b: RemotePlaylist) =>
   a.name === b.name &&
   a.public === b.public &&
   JSON.stringify(ids(a)) === JSON.stringify(ids(b));
+
+function difference(
+  expected: RemotePlaylist,
+  actual: RemotePlaylist,
+): UpdateComparison['fromOriginal'] {
+  const expectedIds = ids(expected);
+  const actualIds = ids(actual);
+  const counts = new Map<string, { trackId: string; expectedCount: number; actualCount: number }>();
+  for (const [side, tracks] of [
+    ['expectedCount', expectedIds],
+    ['actualCount', actualIds],
+  ] as const) {
+    for (const id of tracks) {
+      const count = counts.get(id) ?? { trackId: id, expectedCount: 0, actualCount: 0 };
+      count[side]++;
+      counts.set(id, count);
+    }
+  }
+  const positionChanges: UpdateComparison['fromOriginal']['positionChanges'] = [];
+  for (let index = 0; index < Math.max(expectedIds.length, actualIds.length); index++) {
+    if (expectedIds[index] !== actualIds[index])
+      positionChanges.push({
+        index,
+        expectedTrackId: expectedIds[index] ?? null,
+        actualTrackId: actualIds[index] ?? null,
+      });
+  }
+  return {
+    nameChanged: expected.name !== actual.name,
+    visibilityChanged: actual.public === undefined ? null : expected.public !== actual.public,
+    orderedTracksChanged: positionChanges.length > 0,
+    occurrenceChanges: [...counts.values()].filter(
+      (count) => count.expectedCount !== count.actualCount,
+    ),
+    positionChanges,
+  };
+}
+
+function compare(operation: UpdateOperation, current: RemotePlaylist): UpdateComparison {
+  const matchesOriginal = same(operation.target, current);
+  const matchesIntended = same(operation.intended, current);
+  return {
+    relationship:
+      matchesOriginal && matchesIntended
+        ? 'both'
+        : matchesOriginal
+          ? 'original'
+          : matchesIntended
+            ? 'intended'
+            : 'unexpected',
+    matchesOriginal,
+    matchesIntended,
+    fromOriginal: difference(operation.target, current),
+    fromIntended: difference(operation.intended, current),
+  };
+}
 
 export class Updates {
   constructor(
@@ -161,7 +225,12 @@ export class Updates {
         update: {
           ...source.update!,
           target,
-          warnings: removedTrackIds.map((id) => 'Removed excluded recommendation: ' + id),
+          warnings: [
+            ...new Set([
+              ...source.update!.warnings,
+              ...removedTrackIds.map((id) => 'Removed excluded recommendation: ' + id),
+            ]),
+          ],
         },
       },
       source.id,
@@ -171,8 +240,11 @@ export class Updates {
   }
 
   private async validate(source: Draft) {
-    if (source.entries.some((e) => !e.omit && !e.track))
-      throw new Problem('unresolved_songs', 'Resolve or explicitly omit every addition.');
+    if ([...source.entries, ...(source.update?.references ?? [])].some((e) => !e.omit && !e.track))
+      throw new Problem(
+        'unresolved_songs',
+        'Resolve or explicitly omit every addition and reference-only song.',
+      );
     for (const entry of source.entries) {
       if (!entry.track || entry.omit) continue;
       const fresh = await this.remote.getSong(entry.track.id);
@@ -237,6 +309,7 @@ export class Updates {
         {
           ...operation,
           current,
+          comparison: compare(operation, current),
           status: same(current, operation.intended) ? 'succeeded' : 'verification_failed',
         },
         token,
@@ -249,7 +322,14 @@ export class Updates {
 
   async inspect(id: string) {
     const operation = this.storage.getUpdateOperation(id);
-    return { operation, current: await this.remote.getPlaylist(operation.target.id) };
+    const current = await this.remote.getPlaylist(operation.target.id);
+    return {
+      operation,
+      current,
+      comparison: compare(operation, current),
+      observationWarning:
+        'Current playlist contents cannot establish causation or that a prior request can no longer execute.',
+    };
   }
 
   async reconcile(input: ToolInput<'reconcile_playlist_update'>) {
@@ -269,6 +349,8 @@ export class Updates {
       this.config.timeoutMs * 505 + 10000,
     );
     try {
+      if (input.action === 'retry')
+        await this.validate(this.get(operation.draftId, operation.revision));
       const current = await this.target(operation.target.id);
       if (input.action === 'accept_intended' && !same(current, operation.intended))
         throw new Problem('adoption_mismatch', 'Current state differs from the intended result.');
@@ -278,11 +360,11 @@ export class Updates {
             'target_changed',
             'Baseline changed; accept current state and prepare a fresh update.',
           );
-        await this.validate(this.get(operation.draftId, operation.revision));
       }
       const decided: UpdateOperation = {
         ...operation,
         current,
+        comparison: compare(operation, current),
         recoveryVersion: operation.recoveryVersion + 1,
         recovery: [
           ...operation.recovery,

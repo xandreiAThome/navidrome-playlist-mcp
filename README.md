@@ -227,7 +227,9 @@ Explicit updates work without AudioMuse.
 
 A target conflict requires `refresh_playlist_update` and a new preview.
 An uncertain append blocks every update to that target in this database.
-`get_update_operation` exposes original, intended, and observed states.
+`get_update_operation` exposes original, intended, and observed states, classifies their relationship,
+and reports metadata, ordered-position, and occurrence-count differences. Reconciled
+operations retain the comparison observed when the decision was made.
 `reconcile_playlist_update` requires a stable recovery key, current recovery
 version, reason, and `cannotStillExecute: true`. Choose `accept_intended`,
 `accept_current` (closes without success), or `retry` with `didNotApply: true`.

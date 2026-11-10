@@ -811,3 +811,301 @@ test('update discovery uses reference-only songs and excludes the target without
     ['live', 'other'],
   );
 });
+
+test('update refresh removes even retained target recommendations while preserving explicit repetitions, warnings and shortages', async (t) => {
+  const remote = await navidromeFixture();
+  const audio = await audioMuseFixture();
+  audio.controls.navidromeUrl = remote.config.url;
+  t.onTestFinished(async () => {
+    await remote.close();
+    await audio.close();
+  });
+  remote.playlists.push({
+    id: 'target',
+    name: 'Existing',
+    public: false,
+    entry: [remote.songs[0]!],
+  });
+  audio.controls.rows = remote.songs.map((s) => ({
+    item_id: s.id,
+    title: s.title,
+    author: s.artist,
+    similarity: 0.9,
+    distance: 0.1,
+  }));
+  const app = createApp({
+    ...remote.config,
+    audiomuse: {
+      url: audio.url,
+      token: 'secret-audiomuse-token',
+      server: 'navidrome',
+      budgetMs: 60000,
+      calibration,
+    },
+  });
+  t.onTestFinished(() => app.close());
+  const supplied = { request: { title: 'Hallelujah', artist: 'Jeff Buckley' }, trackId: 'studio' };
+  const references = [
+    { request: { title: 'Hallelujah (Live)', artist: 'Jeff Buckley' }, trackId: 'live' },
+  ];
+  const draft = await ok<Draft>(app, 'save_playlist_update', {
+    playlistId: 'target',
+    entries: [supplied, supplied],
+    references,
+  });
+  const expanded = await ok<{ draft: Draft; shortfall: number; warnings: string[] }>(
+    app,
+    'expand_playlist_update',
+    {
+      draftId: draft.id,
+      revision: 1,
+      mode: 'regenerate',
+      count: 3,
+      requestKey: 'refresh-shortage',
+    },
+  );
+  assert.equal(expanded.shortfall, 2);
+  assert.deepEqual(
+    expanded.draft.entries.map((e) => e.track?.id),
+    ['studio', 'studio', 'other'],
+  );
+  const retained = await ok<Draft>(app, 'save_playlist_update', {
+    draftId: draft.id,
+    expectedRevision: 2,
+    references,
+    retainedTrackIds: ['other'],
+    entries: expanded.draft.entries.map((e) => ({ request: e.request, trackId: e.track!.id })),
+  });
+  assert.equal(retained.update!.shortfall, 2);
+  await ok(app, 'preview_playlist_update', { draftId: draft.id, revision: 3 });
+  remote.playlists[0]!.entry.push(remote.songs[2]!);
+  const refreshed = await ok<{ draft: Draft; removedTrackIds: string[] }>(
+    app,
+    'refresh_playlist_update',
+    { draftId: draft.id, revision: 3 },
+  );
+  assert.deepEqual(refreshed.removedTrackIds, ['other']);
+  assert.deepEqual(
+    refreshed.draft.entries.map((e) => e.track?.id),
+    ['studio', 'studio'],
+  );
+  assert.equal(refreshed.draft.previewed, false);
+  for (const warning of expanded.warnings)
+    assert(refreshed.draft.update!.warnings.includes(warning));
+  assert(refreshed.draft.update!.warnings.some((w) => w.includes('other')));
+  assert.equal(refreshed.draft.update!.shortfall, 2);
+  assert.equal(
+    (
+      await app.execute('apply_playlist_update', {
+        draftId: draft.id,
+        revision: 4,
+        operationKey: 'must-preview',
+      })
+    ).status,
+    'preview_required',
+  );
+  assert.equal(remote.controls.appendRequests, 0);
+});
+
+test('update discovery balances distinct references, enforces count bounds and reports capacity without truncating explicit occurrences', async (t) => {
+  const remote = await navidromeFixture();
+  const audio = await audioMuseFixture();
+  audio.controls.navidromeUrl = remote.config.url;
+  t.onTestFinished(async () => {
+    await remote.close();
+    await audio.close();
+  });
+  remote.playlists.push({
+    id: 'target',
+    name: 'Existing',
+    public: false,
+    entry: [remote.songs[2]!],
+  });
+  const candidates = Array.from({ length: 100 }, (_, i) => ({
+    id: 'new-' + i,
+    title: 'Distinct song ' + i,
+    artist: 'New artist ' + i,
+  }));
+  remote.songs.push(...candidates);
+  const rows = candidates.map((s) => ({
+    item_id: s.id,
+    title: s.title,
+    author: s.artist,
+    similarity: 0.9,
+    distance: 0.1,
+  }));
+  audio.controls.byReference = { studio: rows.slice(0, 50), live: rows.slice(50) };
+  const app = createApp({
+    ...remote.config,
+    audiomuse: {
+      url: audio.url,
+      token: 'secret-audiomuse-token',
+      server: 'navidrome',
+      budgetMs: 60000,
+      calibration,
+    },
+  });
+  t.onTestFinished(() => app.close());
+  const reference = { request: { title: 'Hallelujah', artist: 'Jeff Buckley' }, trackId: 'studio' };
+  const otherReference = {
+    request: { title: 'Hallelujah (Live)', artist: 'Jeff Buckley' },
+    trackId: 'live',
+  };
+  const draft = await ok<Draft>(app, 'save_playlist_update', {
+    playlistId: 'target',
+    entries: [otherReference],
+    references: [...Array(499).fill(reference), otherReference],
+  });
+  for (const count of [0, 101])
+    assert.equal(
+      (
+        await app.execute('expand_playlist_update', {
+          draftId: draft.id,
+          revision: 1,
+          mode: 'regenerate',
+          requestKey: 'invalid-' + count,
+          count,
+        })
+      ).status,
+      'invalid_input',
+    );
+  const balancedInput = {
+    draftId: draft.id,
+    revision: 1,
+    mode: 'regenerate',
+    requestKey: 'distinct-default',
+  };
+  const balanced = await ok<{ draft: Draft; target: number }>(
+    app,
+    'expand_playlist_update',
+    balancedInput,
+  );
+  assert.equal(balanced.target, 2);
+  assert.deepEqual(
+    balanced.draft.entries.map((e) => e.track?.id),
+    ['live', 'new-0', 'new-50'],
+  );
+  assert.deepEqual(await ok(app, 'expand_playlist_update', balancedInput), balanced);
+  assert.equal(
+    (await app.execute('expand_playlist_update', { ...balancedInput, count: 1 })).status,
+    'operation_key_conflict',
+  );
+  const single = await ok<{ draft: Draft; target: number; added: number }>(
+    app,
+    'expand_playlist_update',
+    {
+      draftId: draft.id,
+      revision: 2,
+      mode: 'regenerate',
+      requestKey: 'count-one',
+      count: 1,
+    },
+  );
+  assert.equal(single.target, 1);
+  assert.equal(single.added, 1);
+  const hundred = await ok<{ draft: Draft; added: number; shortfall: number }>(
+    app,
+    'expand_playlist_update',
+    {
+      draftId: draft.id,
+      revision: 3,
+      mode: 'regenerate',
+      requestKey: 'count-hundred',
+      count: 100,
+    },
+  );
+  assert.equal(hundred.added, 100);
+  assert.equal(hundred.shortfall, 0);
+  assert.equal(new Set(hundred.draft.entries.map((e) => e.track!.id)).size, 101);
+  const full = await ok<Draft>(app, 'save_playlist_update', {
+    playlistId: 'target',
+    entries: Array(500).fill({
+      request: { title: 'Omitted occurrence', artist: 'Nobody' },
+      omit: true,
+    }),
+    references: [reference],
+  });
+  const capacity = await ok<{
+    draft: Draft;
+    added: number;
+    shortfall: number;
+    capacityLimited: boolean;
+  }>(app, 'expand_playlist_update', {
+    draftId: full.id,
+    revision: 1,
+    mode: 'add_more',
+    requestKey: 'full-capacity',
+    count: 100,
+  });
+  assert.equal(capacity.draft.entries.length, 500);
+  assert.equal(capacity.added, 0);
+  assert.equal(capacity.shortfall, 100);
+  assert.equal(capacity.capacityLimited, true);
+  assert.equal(remote.controls.appendRequests, 0);
+});
+
+test('update discovery failures and concurrent edits preserve the source and do not commit partial recommendations', async (t) => {
+  const remote = await navidromeFixture();
+  const audio = await audioMuseFixture();
+  audio.controls.navidromeUrl = remote.config.url;
+  t.onTestFinished(async () => {
+    await remote.close();
+    await audio.close();
+  });
+  remote.playlists.push({ id: 'target', name: 'Existing', public: false, entry: [] });
+  audio.controls.rows = remote.songs.map((s) => ({
+    item_id: s.id,
+    title: s.title,
+    author: s.artist,
+    similarity: 0.9,
+    distance: 0.1,
+  }));
+  const app = createApp({
+    ...remote.config,
+    audiomuse: {
+      url: audio.url,
+      token: 'secret-audiomuse-token',
+      server: 'navidrome',
+      budgetMs: 60000,
+      calibration,
+    },
+  });
+  t.onTestFinished(() => app.close());
+  const references = [
+    { request: { title: 'Hallelujah', artist: 'Jeff Buckley' }, trackId: 'studio' },
+  ];
+  const draft = await ok<Draft>(app, 'save_playlist_update', {
+    playlistId: 'target',
+    entries: [],
+    references,
+  });
+  const input = {
+    draftId: draft.id,
+    revision: 1,
+    mode: 'regenerate',
+    requestKey: 'failed-discovery',
+  };
+  audio.controls.analysisFails = true;
+  assert.equal((await app.execute('expand_playlist_update', input)).status, 'analysis_unavailable');
+  assert.deepEqual(await ok(app, 'get_playlist_update', { draftId: draft.id }), draft);
+  audio.controls.analysisFails = false;
+  audio.controls.onSimilarity = async () => {
+    await ok(app, 'save_playlist_update', {
+      draftId: draft.id,
+      expectedRevision: 1,
+      entries: [],
+      references: [],
+    });
+  };
+  assert.equal((await app.execute('expand_playlist_update', input)).status, 'stale_revision');
+  const edited = await ok<Draft>(app, 'get_playlist_update', { draftId: draft.id });
+  assert.equal(edited.revision, 2);
+  assert.deepEqual(edited.entries, []);
+  assert.deepEqual(edited.update!.references, []);
+  audio.controls.onSimilarity = undefined;
+  assert.equal(
+    (await app.execute('expand_playlist_update', { ...input, revision: 2 })).status,
+    'invalid_input',
+  );
+  assert.equal(remote.controls.appendRequests, 0);
+});

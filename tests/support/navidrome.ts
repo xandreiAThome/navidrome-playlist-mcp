@@ -37,6 +37,11 @@ export async function navidromeFixture() {
     creationRequests: 0,
     appendRequests: 0,
     dropAppendResponse: false,
+    dropBeforeAppend: false,
+    failVerificationRead: false,
+    denyAppend: false,
+    onAppend: undefined as (() => void | Promise<void>) | undefined,
+    onGetSong: undefined as (() => void | Promise<void>) | undefined,
     delayAppendMs: 0,
   };
   const server = createServer(async (req, res) => {
@@ -94,6 +99,7 @@ export async function navidromeFixture() {
       return;
     }
     if (endpoint === 'getSong') {
+      await controls.onGetSong?.();
       const song = songs.find((s) => s.id === p.get('id'));
       if (song) send({ song });
       else fail();
@@ -114,6 +120,10 @@ export async function navidromeFixture() {
       return;
     }
     if (endpoint === 'getPlaylist') {
+      if (controls.failVerificationRead && controls.appendRequests > 0) {
+        fail();
+        return;
+      }
       const playlist = playlists.find((v) => v.id === p.get('id'));
       if (playlist) send({ playlist: playlistResponse(playlist) });
       else fail();
@@ -150,6 +160,15 @@ export async function navidromeFixture() {
       }
       if (p.has('songIdToAdd')) {
         controls.appendRequests++;
+        if (controls.denyAppend) {
+          fail();
+          return;
+        }
+        if (controls.dropBeforeAppend) {
+          res.destroy();
+          return;
+        }
+        await controls.onAppend?.();
         if (
           [...p.keys()].some((k) =>
             ['name', 'public', 'comment', 'songIndexToRemove', 'songId'].includes(k),

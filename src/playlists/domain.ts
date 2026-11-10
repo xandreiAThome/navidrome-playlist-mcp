@@ -253,6 +253,33 @@ export const saveUpdateSchema = z
   .refine((v) =>
     v.draftId ? !!v.expectedRevision && !v.playlistId : !!v.playlistId && !v.expectedRevision,
   );
+const playlistDifferenceSchema = z.object({
+  nameChanged: z.boolean(),
+  visibilityChanged: z.boolean().nullable(),
+  orderedTracksChanged: z.boolean(),
+  occurrenceChanges: z.array(
+    z.object({
+      trackId: text,
+      expectedCount: z.number().int().nonnegative(),
+      actualCount: z.number().int().nonnegative(),
+    }),
+  ),
+  positionChanges: z.array(
+    z.object({
+      index: z.number().int().nonnegative(),
+      expectedTrackId: text.nullable(),
+      actualTrackId: text.nullable(),
+    }),
+  ),
+});
+export const updateComparisonSchema = z.object({
+  relationship: z.enum(['original', 'intended', 'both', 'unexpected']),
+  matchesOriginal: z.boolean(),
+  matchesIntended: z.boolean(),
+  fromOriginal: playlistDifferenceSchema,
+  fromIntended: playlistDifferenceSchema,
+});
+export type UpdateComparison = z.infer<typeof updateComparisonSchema>;
 export const updateOperationSchema = z.object({
   kind: z.literal('update'),
   id: text,
@@ -270,6 +297,7 @@ export const updateOperationSchema = z.object({
   ]),
   recoveryVersion: z.number().int().nonnegative(),
   current: targetSchema.optional(),
+  comparison: updateComparisonSchema.optional(),
   recovery: z.array(z.object({ key: text, fingerprint: text, action: text, reason: text })),
 });
 export type UpdateOperation = z.infer<typeof updateOperationSchema>;
@@ -363,7 +391,12 @@ export type ToolData = {
   refresh_playlist_update: { draft: Draft; removedTrackIds: string[] };
   expand_playlist_update: ExpansionResult;
   apply_playlist_update: UpdateOperation;
-  get_update_operation: { operation: UpdateOperation; current: RemotePlaylist };
+  get_update_operation: {
+    operation: UpdateOperation;
+    current: RemotePlaylist;
+    comparison: UpdateComparison;
+    observationWarning: string;
+  };
   reconcile_playlist_update: UpdateOperation;
   configure_playlist_discovery: Draft;
   expand_playlist_draft: ExpansionResult;

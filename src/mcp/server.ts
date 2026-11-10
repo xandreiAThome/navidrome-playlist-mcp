@@ -45,7 +45,7 @@ const tools: { name: ToolName; readOnly: boolean; description: string }[] = [
     name: 'get_update_operation',
     readOnly: true,
     description:
-      'Inspect immutable update intent, recovery history and current target. Current contents do not prove causation or that a pending request finished.',
+      'Inspect immutable update intent, recovery history and current target. Reports original/intended/both/unexpected relationship and metadata, ordered-position and occurrence-count differences. Current contents do not prove causation or that a pending request finished.',
   },
   {
     name: 'reconcile_playlist_update',

@@ -269,4 +269,9 @@ test('killed append worker leaves a durable target block across MCP processes', 
     ['other'],
   );
   assert.equal(remote.controls.appendRequests, 1);
+  const inspection = await call(second.client, 'get_update_operation', {
+    operationId: repeated.data.id,
+  });
+  assert.equal((inspection.data.comparison as { relationship: string }).relationship, 'intended');
+  assert.match(inspection.data.observationWarning as string, /cannot establish/);
 });
