@@ -5,8 +5,9 @@ patterns for changes and reviews. Mechanical settings remain authoritative in
 [package.json](../package.json), [TypeScript configuration](../tsconfig.json),
 [ESLint configuration](../eslint.config.js), and
 [Prettier configuration](../.prettierrc.json). Module ownership is documented in
-the [architecture guide](architecture.md); domain meanings and architectural
-guarantees remain authoritative in the glossary and ADRs linked there.
+the [architecture guide](architecture.md), with code entry points in the
+[project map](project-map.md); domain meanings and architectural guarantees remain
+authoritative in the glossary and ADRs linked there.
 
 ## Contracts and module boundaries
 
@@ -85,10 +86,9 @@ guarantees remain authoritative in the glossary and ADRs linked there.
 - Verify the intended ordered track IDs, repetitions, name, and visibility before
   claiming publication success. Keep explicit omission and ambiguous/missing-song
   resolution meaningful; do not silently substitute or discard requested songs.
-- Keep new-playlist publication and planned existing-playlist updates distinct.
-  [ADR 0004](adr/0004-append-to-existing-playlists.md) defines future update rules;
-  do not assume its target snapshots or reference-only inputs already exist in
-  the current implementation.
+- Apply the operation-specific creation and update rules in the relevant ADRs.
+  Preserve each workflow's revision, verification, retry, and recovery guarantees
+  when sharing implementation across them.
 
 ## Tests and completion
 
@@ -118,7 +118,8 @@ guarantees remain authoritative in the glossary and ADRs linked there.
 
 Change shared contracts, their behavior tests, and affected tool descriptions in
 the same change. When moving a module or changing its ownership, update the
-architecture map. Link feature specs to shared conventions rather than copying
+project map; revise the architecture when its boundaries or guarantees change.
+Link feature specs to shared conventions rather than copying
 them. Keep runtime versions and mechanical rules in configuration, decision
 rationale in ADRs, domain terms in the glossary, and setup instructions in the
 README. If a feature requires changing an existing guarantee, make that trade-off

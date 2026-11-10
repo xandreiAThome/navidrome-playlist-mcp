@@ -17,8 +17,13 @@ codebase, read `docs/agents/domain.md`.
 
 ### Architecture
 
-Before navigating modules or changing system boundaries, read
-`docs/architecture.md` for the current architecture and project map.
+Before changing system boundaries or guarantees, read
+`docs/architecture.md`.
+
+### Project map
+
+Before navigating the codebase, read `docs/project-map.md` for module
+entry points and authoritative configuration.
 
 ### Coding standards
 
