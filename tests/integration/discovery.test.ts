@@ -750,3 +750,64 @@ test('AudioMuse connectivity shares one budget across version and server-binding
     'discovery_timeout',
   );
 });
+
+test('update discovery uses reference-only songs and excludes the target without appending examples', async (t) => {
+  const remote = await navidromeFixture();
+  const audio = await audioMuseFixture();
+  audio.controls.navidromeUrl = remote.config.url;
+  t.onTestFinished(async () => {
+    await remote.close();
+    await audio.close();
+  });
+  remote.playlists.push({
+    id: 'target',
+    name: 'Existing',
+    public: false,
+    entry: [remote.songs[1]!],
+  });
+  audio.controls.rows = remote.songs.map((s) => ({
+    item_id: s.id,
+    title: s.title,
+    author: s.artist,
+    similarity: 0.9,
+    distance: 0.1,
+  }));
+  const app = createApp({
+    ...remote.config,
+    audiomuse: {
+      url: audio.url,
+      token: 'secret-audiomuse-token',
+      server: 'navidrome',
+      budgetMs: 60000,
+      calibration,
+    },
+  });
+  t.onTestFinished(() => app.close());
+  const draft = await ok<Draft>(app, 'save_playlist_update', {
+    playlistId: 'target',
+    entries: [],
+    references: [{ request: { title: 'Hallelujah', artist: 'Jeff Buckley' }, trackId: 'studio' }],
+  });
+  const expanded = await ok<{ draft: Draft; added: number }>(app, 'expand_playlist_update', {
+    draftId: draft.id,
+    revision: 1,
+    mode: 'regenerate',
+    requestKey: 'update-discovery',
+  });
+  assert.equal(expanded.added, 1);
+  assert.deepEqual(
+    expanded.draft.entries.map((e) => e.track?.id),
+    ['other'],
+  );
+  await ok(app, 'preview_playlist_update', { draftId: draft.id, revision: 2 });
+  const operation = await ok<{ status: string }>(app, 'apply_playlist_update', {
+    draftId: draft.id,
+    revision: 2,
+    operationKey: 'apply-discovery',
+  });
+  assert.equal(operation.status, 'succeeded');
+  assert.deepEqual(
+    remote.playlists[0]!.entry.map((s) => s.id),
+    ['live', 'other'],
+  );
+});

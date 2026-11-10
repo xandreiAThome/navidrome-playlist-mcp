@@ -85,6 +85,16 @@ test('legacy database retains revisions, preview, unknown publication, aliases a
       .status,
     'operation_key_conflict',
   );
+  remote.playlists.push({ id: 'upgrade-target', name: 'Existing', public: false, entry: [] });
+  const update = await service.execute('save_playlist_update', {
+    playlistId: 'upgrade-target',
+    entries: [],
+  });
+  assert.equal(update.status, 'ok');
+  assert.equal(
+    (await service.execute('get_operation', { operationId: operation.id })).status,
+    'ok',
+  );
   // A subsequent startup must leave migrated state and the recorded recovery intact.
   const reopened = createApp(remote.config);
   t.onTestFinished(() => reopened.close());

@@ -31,6 +31,9 @@ export async function navidromeFixture() {
     leakError: false,
     visibilityIgnored: false,
     creationRequests: 0,
+    appendRequests: 0,
+    dropAppendResponse: false,
+    delayAppendMs: 0,
   };
   const server = createServer(async (req, res) => {
     const url = new URL(req.url!, 'http://localhost');
@@ -121,6 +124,27 @@ export async function navidromeFixture() {
       const playlist = playlists.find((v) => v.id === p.get('playlistId'));
       if (!playlist) {
         fail();
+        return;
+      }
+      if (p.has('songIdToAdd')) {
+        controls.appendRequests++;
+        if (
+          [...p.keys()].some((k) =>
+            ['name', 'public', 'comment', 'songIndexToRemove', 'songId'].includes(k),
+          )
+        ) {
+          fail();
+          return;
+        }
+        if (controls.delayAppendMs) await new Promise((r) => setTimeout(r, controls.delayAppendMs));
+        const additions = p.getAll('songIdToAdd').flatMap((id) => songs.filter((s) => s.id === id));
+        if (controls.dropLastTrack) additions.pop();
+        playlist.entry.push(...additions);
+        if (controls.dropAppendResponse) {
+          res.destroy();
+          return;
+        }
+        send({});
         return;
       }
       if (!controls.visibilityIgnored) playlist.public = p.get('public') === 'true';

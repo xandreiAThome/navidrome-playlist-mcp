@@ -201,6 +201,7 @@ export class Discovery {
     const source = this.storage.getDraft(input.draftId);
     if (source.revision !== input.revision)
       throw new Problem('stale_revision', 'Reload the draft before configuring discovery.');
+    if (source.update) throw new Problem('invalid_input', 'Use the update tools.');
     const retained = input.retainedTrackIds ? new Set(input.retainedTrackIds) : undefined;
     if (
       retained &&
@@ -250,6 +251,7 @@ export class Discovery {
     const previous = this.storage.expansionReceipt(input.requestKey, fingerprint);
     if (previous) return previous;
     const source = this.storage.getDraft(input.draftId);
+    if (source.update) throw new Problem('invalid_input', 'Use update expansion.');
     if (source.revision !== input.revision)
       throw new Problem('stale_revision', 'Reload the draft before expansion.');
     if (source.locked) throw new Problem('draft_locked', 'Copy this draft before expanding it.');
@@ -316,6 +318,83 @@ export class Discovery {
               artist: track.artist,
               ...(track.album ? { album: track.album } : {}),
             },
+            track,
+            recommendation,
+          })),
+        ],
+      },
+      source.id,
+      source.revision,
+      input.requestKey,
+      fingerprint,
+      {
+        target,
+        added: result.recommendations.length,
+        shortfall: target - result.recommendations.length,
+        capacityLimited: target > capacity,
+        candidateLimitReached: result.candidateLimitReached,
+        warnings: result.warnings,
+      },
+    );
+  }
+
+  async expandUpdate(input: ToolInput<'expand_playlist_update'>): Promise<ExpansionResult> {
+    const fingerprint = createHash('sha256')
+      .update('update:' + JSON.stringify(input))
+      .digest('hex');
+    const previous = this.storage.expansionReceipt(input.requestKey, fingerprint);
+    if (previous) return previous;
+    const source = this.storage.getDraft(input.draftId);
+    if (!source.update) throw new Problem('invalid_input', 'Choose an update draft.');
+    if (source.revision !== input.revision)
+      throw new Problem('stale_revision', 'Reload the update.');
+    if (source.locked) throw new Problem('draft_locked', 'This update is locked.');
+    if ([...source.entries, ...source.update.references].some((e) => !e.omit && !e.track))
+      throw new Problem('unresolved_songs', 'Resolve or omit additions and reference-only songs.');
+    const references = [
+      ...new Map(
+        source.update.references
+          .filter((e) => !e.omit && e.track)
+          .map((e) => [e.track!.id, e.track!]),
+      ).values(),
+    ];
+    if (!references.length)
+      throw new Problem('invalid_input', 'Supply at least one resolved reference.');
+    const base =
+      input.mode === 'add_more'
+        ? source.entries
+        : source.entries.filter((e) => !e.recommendation || e.recommendation.retained);
+    const target = input.count ?? Math.min(20, references.length);
+    const capacity = Math.max(0, 500 - base.length);
+    const { signal, calibration } = await this.start();
+    const result = await this.recommend(
+      references,
+      Math.min(target, capacity),
+      new Set([
+        ...source.update.target.tracks.map((t) => t.id),
+        ...references.map((t) => t.id),
+        ...base.flatMap((e) => (e.track && !e.omit ? [e.track.id] : [])),
+      ]),
+      [...references, ...base.flatMap((e) => (e.track && !e.omit ? [e.track] : []))],
+      input.allowAlternateVersions,
+      signal,
+      calibration.maxDistance,
+    );
+    if (signal.aborted)
+      throw new Problem('discovery_timeout', 'Discovery deadline exhausted; draft unchanged.');
+    return this.storage.saveExpansion(
+      {
+        name: source.name,
+        visibility: source.visibility,
+        update: {
+          ...source.update,
+          shortfall: target - result.recommendations.length,
+          warnings: result.warnings,
+        },
+        entries: [
+          ...base,
+          ...result.recommendations.map(({ track, recommendation }) => ({
+            request: { title: track.title, artist: track.artist },
             track,
             recommendation,
           })),

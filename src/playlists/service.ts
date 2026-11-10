@@ -1,3 +1,4 @@
+import type { Updates } from './updates.ts';
 import { z } from 'zod';
 import { Problem, toolSchemas } from './domain.ts';
 import type {
@@ -24,12 +25,21 @@ export class PlaylistService {
     publication: Publication,
     audiomuse: AudioMuse,
     discovery: Discovery,
+    updates: Updates,
   ) {
     const resolve = async (song: RequestedSong) => {
       const found = await navidrome.search(song.title);
       return match(song, found.tracks, found.complete);
     };
     this.handlers = {
+      save_playlist_update: (value) => updates.save(value),
+      get_playlist_update: (value) => updates.get(value.draftId, value.revision),
+      preview_playlist_update: (value) => updates.preview(value),
+      refresh_playlist_update: (value) => updates.refresh(value),
+      expand_playlist_update: (value) => discovery.expandUpdate(value),
+      apply_playlist_update: (value) => updates.apply(value),
+      get_update_operation: (value) => updates.inspect(value.operationId),
+      reconcile_playlist_update: (value) => updates.reconcile(value),
       configure_playlist_discovery: (value) => discovery.configure(value),
       expand_playlist_draft: (value) => discovery.expand(value),
       find_similar_tracks: ({ trackId, count, allowAlternateVersions }) =>
@@ -49,6 +59,7 @@ export class PlaylistService {
       preview_playlist: ({ draftId, revision }) => storage.preview(draftId, revision),
       copy_playlist_draft: ({ draftId, revision, name }) => {
         const source = storage.getDraft(draftId, revision);
+        if (source.update) throw new Problem('invalid_input', 'Use the update tools.');
         return storage.saveDraft({
           name: name ?? source.name,
           visibility: source.visibility,
@@ -58,6 +69,7 @@ export class PlaylistService {
       },
       save_playlist_draft: async (value) => {
         const previous = value.draftId ? storage.getDraft(value.draftId) : undefined;
+        if (previous?.update) throw new Problem('invalid_input', 'Use the update tools.');
         const entries: Entry[] = [];
         for (const entry of value.entries) {
           if (entry.omit) entries.push({ request: entry.request, omit: true });

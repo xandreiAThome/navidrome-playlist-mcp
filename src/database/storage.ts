@@ -9,10 +9,18 @@ import {
   draftSchema,
   operationSchema,
   expansionResultSchema,
+  updateOperationSchema,
 } from '../playlists/domain.ts';
-import type { Config, Draft, Operation, ExpansionResult } from '../playlists/domain.ts';
+import type {
+  Config,
+  Draft,
+  Operation,
+  ExpansionResult,
+  UpdateOperation,
+} from '../playlists/domain.ts';
 import { migrate } from './migrate.ts';
 import {
+  updateOperations,
   identity,
   drafts,
   revisions,
@@ -168,6 +176,118 @@ export class Storage {
         .run();
       return result;
     });
+  }
+
+  getUpdateOperation(id: string): UpdateOperation {
+    const row = this.db.select().from(updateOperations).where(eq(updateOperations.id, id)).get();
+    if (!row) throw new Problem('not_found', 'Update operation was not found.');
+    return updateOperationSchema.parse(JSON.parse(row.payload));
+  }
+
+  updateForDraft(id: string) {
+    const row = this.db
+      .select()
+      .from(updateOperations)
+      .where(eq(updateOperations.draftId, id))
+      .get();
+    return row ? this.getUpdateOperation(row.id) : undefined;
+  }
+
+  claimUpdate(operation: UpdateOperation, leaseMs: number) {
+    return this.transaction(() => {
+      this.checkOperationKey(operation.operationKey, operation.draftId, operation.revision);
+      this.rememberOperationKey(operation.operationKey, operation.draftId, operation.revision);
+      const previous = this.updateForDraft(operation.draftId);
+      if (previous) return { operation: previous };
+      const source = this.getDraft(operation.draftId);
+      if (source.revision !== operation.revision)
+        throw new Problem('stale_revision', 'Reload the update.');
+      if (source.locked) throw new Problem('draft_locked', 'This draft is locked.');
+      if (!source.previewed) throw new Problem('preview_required', 'Preview the update.');
+      const blocked = this.db
+        .select()
+        .from(updateOperations)
+        .where(
+          and(
+            eq(updateOperations.targetId, operation.target.id),
+            eq(updateOperations.blocked, true),
+          ),
+        )
+        .get();
+      if (blocked)
+        throw new Problem('operation_busy', 'Reconcile the active operation for this target.');
+      const token = randomUUID();
+      this.db
+        .insert(updateOperations)
+        .values({
+          id: operation.id,
+          draftId: source.id,
+          targetId: operation.target.id,
+          payload: JSON.stringify(operation),
+          owner: token,
+          leaseUntil: Date.now() + leaseMs,
+        })
+        .run();
+      this.db.update(drafts).set({ locked: true }).where(eq(drafts.id, source.id)).run();
+      return { operation, token };
+    });
+  }
+
+  claimUpdateRecovery(id: string, version: number, leaseMs: number) {
+    return this.transaction(() => {
+      const operation = this.getUpdateOperation(id);
+      if (['succeeded', 'reconciled', 'no_changes'].includes(operation.status))
+        throw new Problem('invalid_recovery', 'This operation is closed.');
+      if (operation.recoveryVersion !== version)
+        throw new Problem('stale_recovery', 'Reload recovery state.');
+      const row = this.db.select().from(updateOperations).where(eq(updateOperations.id, id)).get()!;
+      if (row.owner && row.leaseUntil > Date.now())
+        throw new Problem('operation_busy', 'The worker is still active.');
+      const token = randomUUID();
+      this.db
+        .update(updateOperations)
+        .set({ owner: token, leaseUntil: Date.now() + leaseMs })
+        .where(eq(updateOperations.id, id))
+        .run();
+      return { operation, token };
+    });
+  }
+
+  cancelUndispatchedUpdate(id: string, token: string) {
+    this.transaction(() => {
+      const operation = this.getUpdateOperation(id);
+      const result = this.db
+        .delete(updateOperations)
+        .where(and(eq(updateOperations.id, id), eq(updateOperations.owner, token)))
+        .run();
+      if (!result.changes)
+        throw new Problem('operation_busy', 'Another worker owns this operation.');
+      this.db.update(drafts).set({ locked: false }).where(eq(drafts.id, operation.draftId)).run();
+    });
+  }
+
+  checkpointUpdate(operation: UpdateOperation, token: string) {
+    const result = this.db
+      .update(updateOperations)
+      .set({ payload: JSON.stringify(operation) })
+      .where(and(eq(updateOperations.id, operation.id), eq(updateOperations.owner, token)))
+      .run();
+    if (!result.changes) throw new Problem('operation_busy', 'Another worker owns recovery.');
+  }
+
+  finishUpdate(operation: UpdateOperation, token: string, closed: boolean) {
+    const result = this.db
+      .update(updateOperations)
+      .set({
+        payload: JSON.stringify(operation),
+        owner: null,
+        leaseUntil: 0,
+        blocked: !closed,
+      })
+      .where(and(eq(updateOperations.id, operation.id), eq(updateOperations.owner, token)))
+      .run();
+    if (!result.changes) throw new Problem('operation_busy', 'Another worker owns recovery.');
+    return operation;
   }
 
   operationForDraft(id: string): Operation | undefined {

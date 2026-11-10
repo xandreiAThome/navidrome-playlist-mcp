@@ -32,6 +32,7 @@ export class Publication {
   async publish(value: ToolInput<'publish_playlist'>): Promise<Operation> {
     this.storage.checkOperationKey(value.operationKey, value.draftId, value.revision);
     const draft = this.storage.getDraft(value.draftId);
+    if (draft.update) throw new Problem('invalid_input', 'Use apply_playlist_update.');
     if (draft.revision !== value.revision)
       throw new Problem('stale_revision', 'Publish the current draft revision.');
     const previous = this.storage.operationForDraft(draft.id);

@@ -43,6 +43,7 @@ export type Config = {
   searchMaxPages: number;
 };
 export type ProblemCode =
+  | 'target_changed'
   | 'audiomuse_unavailable'
   | 'audiomuse_error'
   | 'analysis_unavailable'
@@ -152,6 +153,18 @@ export const entrySchema = z.object({
   recommendation: recommendationSchema.optional(),
 });
 export type Entry = z.infer<typeof entrySchema>;
+export const targetSchema = z.object({
+  id: text,
+  name: text,
+  public: z.boolean(),
+  tracks: z.array(trackSchema),
+});
+export const updateStateSchema = z.object({
+  target: targetSchema,
+  references: z.array(entrySchema).max(500),
+  shortfall: z.number().int().nonnegative().default(0),
+  warnings: z.array(z.string()).default([]),
+});
 export const draftSchema = z.object({
   id: text,
   revision: z.number().int().positive(),
@@ -161,6 +174,7 @@ export const draftSchema = z.object({
   previewed: z.boolean(),
   locked: z.boolean(),
   referenceTrackIds: z.array(text).max(500).optional(),
+  update: updateStateSchema.optional(),
 });
 export type Draft = z.infer<typeof draftSchema>;
 export const expandDraftSchema = draftRefSchema
@@ -226,7 +240,67 @@ export const reconcileSchema = z
         message: 'Resume does not accept an assertion reason.',
       });
   });
+export const saveUpdateSchema = z
+  .object({
+    playlistId: text.optional(),
+    draftId: text.optional(),
+    expectedRevision: z.number().int().positive().optional(),
+    entries: z.array(entryInputSchema).max(500),
+    references: z.array(entryInputSchema).max(500).default([]),
+    retainedTrackIds: z.array(text).max(500).optional(),
+  })
+  .strict()
+  .refine((v) =>
+    v.draftId ? !!v.expectedRevision && !v.playlistId : !!v.playlistId && !v.expectedRevision,
+  );
+export const updateOperationSchema = z.object({
+  kind: z.literal('update'),
+  id: text,
+  draftId: text,
+  revision: z.number().int().positive(),
+  operationKey: text,
+  target: targetSchema,
+  intended: targetSchema,
+  status: z.enum([
+    'unknown_outcome',
+    'verification_failed',
+    'succeeded',
+    'reconciled',
+    'no_changes',
+  ]),
+  recoveryVersion: z.number().int().nonnegative(),
+  current: targetSchema.optional(),
+  recovery: z.array(z.object({ key: text, fingerprint: text, action: text, reason: text })),
+});
+export type UpdateOperation = z.infer<typeof updateOperationSchema>;
+export const reconcileUpdateSchema = z
+  .object({
+    operationId: text,
+    recoveryKey: text,
+    expectedRecoveryVersion: z.number().int().nonnegative(),
+    action: z.enum(['accept_intended', 'retry', 'accept_current']),
+    cannotStillExecute: z.literal(true),
+    didNotApply: z.literal(true).optional(),
+    reason: text,
+  })
+  .strict()
+  .refine((v) => v.action !== 'retry' || v.didNotApply === true);
+export type UpdatePreview = {
+  draft: Draft;
+  existingCount: number;
+  resultingCount: number;
+  resultingTrackIds: string[];
+  repeatedTrackIds: string[];
+};
 export const toolSchemas = {
+  save_playlist_update: saveUpdateSchema,
+  get_playlist_update: getDraftSchema,
+  preview_playlist_update: draftRefSchema,
+  refresh_playlist_update: draftRefSchema,
+  expand_playlist_update: expandDraftSchema,
+  apply_playlist_update: publishSchema,
+  get_update_operation: z.object({ operationId: text }).strict(),
+  reconcile_playlist_update: reconcileUpdateSchema,
   configure_playlist_discovery: draftRefSchema
     .extend({
       retainedTrackIds: z.array(text).max(500).optional(),
@@ -283,6 +357,14 @@ export type Operation = z.infer<typeof operationSchema>;
 export type RemotePlaylist = { id: string; name: string; public?: boolean; tracks: Track[] };
 
 export type ToolData = {
+  save_playlist_update: Draft;
+  get_playlist_update: Draft;
+  preview_playlist_update: UpdatePreview;
+  refresh_playlist_update: { draft: Draft; removedTrackIds: string[] };
+  expand_playlist_update: ExpansionResult;
+  apply_playlist_update: UpdateOperation;
+  get_update_operation: { operation: UpdateOperation; current: RemotePlaylist };
+  reconcile_playlist_update: UpdateOperation;
   configure_playlist_discovery: Draft;
   expand_playlist_draft: ExpansionResult;
   find_similar_tracks: DiscoveryResult;

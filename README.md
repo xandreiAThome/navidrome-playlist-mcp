@@ -207,3 +207,36 @@ must exist **inside the container**; use a Compose override to bind-mount your
 calibration file read-only, then set `AUDIOMUSE_CALIBRATION_PATH` to its container
 path. Keep credentials in `.env`, and rebuild the image to include new tools and
 migrations.
+
+### Appending to an existing playlist
+
+Use `list_playlists` to disambiguate names, then `save_playlist_update` with a
+`playlistId`, ordered `entries`, and optional separate `references`. References
+guide discovery and are not appended. Entries use the same requested-song,
+`trackId`, and explicit omission fields as creation drafts. Edits replace these
+lists using `draftId` and `expectedRevision`; `retainedTrackIds` optionally sets
+which recommendations regeneration protects. `recommendation: null` makes an
+occurrence an explicit requested addition.
+
+Use `expand_playlist_update` for balanced recommendations, then
+`preview_playlist_update` and `apply_playlist_update` for that exact revision.
+Persist request and operation keys across retries. The preview includes the full
+resulting order, repetition warnings, separate references, and discovery
+shortfalls. Existing playlist size does not consume the 500 addition slots.
+Explicit updates work without AudioMuse.
+
+A target conflict requires `refresh_playlist_update` and a new preview.
+An uncertain append blocks every update to that target in this database.
+`get_update_operation` exposes original, intended, and observed states.
+`reconcile_playlist_update` requires a stable recovery key, current recovery
+version, reason, and `cannotStillExecute: true`. Choose `accept_intended`,
+`accept_current` (closes without success), or `retry` with `didNotApply: true`.
+These assertions must follow external investigation; playlist contents alone do
+not establish request completion. The service never repairs or rolls back an
+unexpected result. Intentional later additions require a fresh update draft.
+
+Appends preserve name and visibility and send only ordered additions to the
+existing ID. Conflict detection is best effort against other Navidrome clients.
+Compatibility of ordering, repeated IDs, metadata preservation, and ownership
+restrictions on the deployed Navidrome version still requires release validation;
+local HTTP fixtures do not establish deployed compatibility.

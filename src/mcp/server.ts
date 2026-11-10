@@ -6,6 +6,54 @@ import type { PlaylistService } from '../playlists/service.ts';
 
 const tools: { name: ToolName; readOnly: boolean; description: string }[] = [
   {
+    name: 'save_playlist_update',
+    readOnly: false,
+    description:
+      'Create or edit local append additions and separate reference-only songs. Bind creation to a playlist ID; edits require expectedRevision. Preserve requested occurrences. No remote writes.',
+  },
+  {
+    name: 'get_playlist_update',
+    readOnly: true,
+    description:
+      'Inspect an update draft or immutable historical revision, including target snapshot, additions, references and omissions.',
+  },
+  {
+    name: 'preview_playlist_update',
+    readOnly: false,
+    description:
+      'Record exact update revision review. Shows full resulting order, target metadata, counts, repetition warnings, omissions and discovery shortfalls.',
+  },
+  {
+    name: 'refresh_playlist_update',
+    readOnly: false,
+    description:
+      'Refresh target snapshot after conflict, preserving explicit occurrences and reporting excluded recommendations. Requires a new preview; does not refill recommendations.',
+  },
+  {
+    name: 'expand_playlist_update',
+    readOnly: false,
+    description:
+      'Generate balanced additional recommendations using only reference-only songs. Excludes target, references and selected additions. Regenerate protects retained recommendations; add_more adds another batch. Stable requestKey makes retries idempotent. Shortages are valid outcomes; failures preserve source.',
+  },
+  {
+    name: 'apply_playlist_update',
+    readOnly: false,
+    description:
+      'Append exact previewed additions once to the existing target, preserving metadata. Optional approval refers to exact revision. Conflicts prevent dispatch; uncertain outcomes block target until explicit recovery. Inspect inner status.',
+  },
+  {
+    name: 'get_update_operation',
+    readOnly: true,
+    description:
+      'Inspect immutable update intent, recovery history and current target. Current contents do not prove causation or that a pending request finished.',
+  },
+  {
+    name: 'reconcile_playlist_update',
+    readOnly: false,
+    description:
+      'Explicit recovery: accept_intended verifies exact result, accept_current closes without success, retry requires didNotApply. Every action requires cannotStillExecute=true and reason. Stable recoveryKey and current recoveryVersion protect retries. Never repairs or rolls back.',
+  },
+  {
     name: 'configure_playlist_discovery',
     readOnly: false,
     description:

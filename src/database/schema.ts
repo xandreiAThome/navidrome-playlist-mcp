@@ -1,4 +1,11 @@
-import { integer, text, sqliteTable, primaryKey, check } from 'drizzle-orm/sqlite-core';
+import {
+  integer,
+  text,
+  sqliteTable,
+  primaryKey,
+  check,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 import type { Operation } from '../playlists/domain.ts';
 
@@ -56,3 +63,24 @@ export const expansionReceipts = sqliteTable('expansion_receipts', {
   fingerprint: text().notNull(),
   payload: text().notNull(),
 });
+
+export const updateOperations = sqliteTable(
+  'update_operations',
+  {
+    id: text().primaryKey(),
+    draftId: text('draft_id')
+      .notNull()
+      .unique()
+      .references(() => drafts.id),
+    targetId: text('target_id').notNull(),
+    payload: text().notNull(),
+    owner: text(),
+    leaseUntil: integer('lease_until').notNull().default(0),
+    blocked: integer({ mode: 'boolean' }).notNull().default(true),
+  },
+  (table) => [
+    uniqueIndex('update_target_block')
+      .on(table.targetId)
+      .where(sql`${table.blocked} = 1`),
+  ],
+);

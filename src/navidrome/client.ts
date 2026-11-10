@@ -80,6 +80,14 @@ export class Navidrome {
     return parsed.data.id;
   }
 
+  async appendPlaylist(id: string, ids: string[]) {
+    if (!ids.length) return;
+    await this.request('updatePlaylist', [
+      ['playlistId', id],
+      ...ids.map((id) => ['songIdToAdd', id] as [string, string]),
+    ]);
+  }
+
   async setVisibility(id: string, visibility: 'public' | 'private') {
     await this.request('updatePlaylist', [
       ['playlistId', id],

@@ -1,3 +1,4 @@
+import { Updates } from './playlists/updates.ts';
 import type { Config } from './playlists/domain.ts';
 import { Storage } from './database/storage.ts';
 import { Navidrome } from './navidrome/client.ts';
@@ -17,6 +18,7 @@ export function createApp(config: Config): PlaylistService {
       new Publication(storage, navidrome, config),
       audiomuse,
       new Discovery(config.audiomuse, audiomuse, navidrome, storage),
+      new Updates(storage, navidrome, config),
     );
   } catch (error) {
     storage.close();

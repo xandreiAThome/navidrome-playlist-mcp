@@ -31,6 +31,14 @@ test('a local MCP client discovers tools and completes a previewed playlist work
   assert.deepEqual(
     tools.map((tool) => tool.name).sort(),
     [
+      'save_playlist_update',
+      'get_playlist_update',
+      'preview_playlist_update',
+      'refresh_playlist_update',
+      'expand_playlist_update',
+      'apply_playlist_update',
+      'get_update_operation',
+      'reconcile_playlist_update',
       'check_connection',
       'check_audiomuse_connection',
       'discover_tracks',
@@ -186,4 +194,79 @@ test('separate MCP processes serialize publication and recover conservatively af
   });
   assert.equal(adopted.status, 'succeeded');
   assert.equal(remote.playlists.length, 2);
+});
+
+test('killed append worker leaves a durable target block across MCP processes', async (t) => {
+  const remote = await navidromeFixture();
+  t.onTestFinished(() => remote.close());
+  remote.playlists.push({ id: 'target', name: 'Existing', public: false, entry: [] });
+  const connect = async () => {
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [fileURLToPath(new URL('../../dist/cli.js', import.meta.url))],
+      env: {
+        NAVIDROME_URL: remote.config.url,
+        NAVIDROME_USERNAME: 'tester',
+        NAVIDROME_PASSWORD: 'secret-password',
+        NAVIDROME_DB_PATH: remote.config.databasePath,
+        NAVIDROME_TIMEOUT_MS: '1000',
+      },
+      stderr: 'pipe',
+    });
+    const client = new Client({ name: 'append-crash-test', version: '1.0.0' });
+    t.onTestFinished(() => client.close());
+    await client.connect(transport);
+    return { client, transport };
+  };
+  const first = await connect();
+  const second = await connect();
+  const call = async (client: Client, name: string, args: Record<string, unknown>) => {
+    const response = await client.callTool({ name, arguments: args });
+    return response.structuredContent as { status: string; data: Record<string, unknown> };
+  };
+  const saved = await call(first.client, 'save_playlist_update', {
+    playlistId: 'target',
+    entries: [{ request: { title: 'Teardrop', artist: 'Massive Attack' }, trackId: 'other' }],
+  });
+  assert.equal(saved.status, 'ok');
+  const ref = { draftId: saved.data.id, revision: 1 };
+  await call(first.client, 'preview_playlist_update', ref);
+  remote.controls.delayAppendMs = 400;
+  const pending = first.client
+    .callTool({
+      name: 'apply_playlist_update',
+      arguments: { ...ref, operationKey: 'killed-append' },
+    })
+    .catch(() => undefined);
+  const deadline = Date.now() + 3000;
+  while (!remote.controls.appendRequests && Date.now() < deadline) await delay(10);
+  assert.equal(remote.controls.appendRequests, 1);
+  process.kill(first.transport.pid!, 'SIGKILL');
+  await pending;
+  const repeated = await call(second.client, 'apply_playlist_update', {
+    ...ref,
+    operationKey: 'after-kill',
+  });
+  assert.equal(repeated.data.status, 'unknown_outcome');
+  const other = await call(second.client, 'save_playlist_update', {
+    playlistId: 'target',
+    entries: [],
+  });
+  const otherRef = { draftId: other.data.id, revision: 1 };
+  await call(second.client, 'preview_playlist_update', otherRef);
+  assert.equal(
+    (
+      await call(second.client, 'apply_playlist_update', {
+        ...otherRef,
+        operationKey: 'cannot-bypass-kill',
+      })
+    ).status,
+    'operation_busy',
+  );
+  await delay(450);
+  assert.deepEqual(
+    remote.playlists[0]!.entry.map((s) => s.id),
+    ['other'],
+  );
+  assert.equal(remote.controls.appendRequests, 1);
 });
