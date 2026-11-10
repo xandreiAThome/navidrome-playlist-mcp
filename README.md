@@ -40,6 +40,9 @@ docker compose build
 ```
 
 Add this to your MCP client's configuration and replace the paths:
+The example includes `compose.override.yaml` for the AudioMuse calibration mount
+described in the [calibration guide](docs/calibration.md). If you haven't created
+that override, omit its `--file` argument and path.
 
 ```json
 {
@@ -52,6 +55,8 @@ Add this to your MCP client's configuration and replace the paths:
         "/absolute/path/to/navidrome-mcp",
         "--file",
         "/absolute/path/to/navidrome-mcp/compose.yaml",
+        "--file",
+        "/absolute/path/to/navidrome-mcp/compose.override.yaml",
         "--env-file",
         "/absolute/path/to/navidrome-mcp/.env",
         "run",
@@ -66,6 +71,10 @@ Add this to your MCP client's configuration and replace the paths:
 
 Your MCP client starts the server when it connects. Use `compose run`, as shown,
 rather than `compose up -d`: this server communicates over stdin/stdout.
+`--rm` removes the container when the client disconnects, and `-T` disables the
+terminal so MCP messages pass through unchanged. Explicit `--file` arguments
+disable automatic override loading, so include both files when using the
+calibration mount.
 
 ## Run locally instead
 

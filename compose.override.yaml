@@ -1,0 +1,6 @@
+services:
+  navidrome-mcp:
+    volumes:
+      - ./.data/audiomuse-calibration.json:/config/audiomuse-calibration.json:ro,Z
+    environment:
+      AUDIOMUSE_CALIBRATION_PATH: /config/audiomuse-calibration.json
