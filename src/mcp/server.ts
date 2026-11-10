@@ -6,6 +6,36 @@ import type { PlaylistService } from '../playlists/service.ts';
 
 const tools: { name: ToolName; readOnly: boolean; description: string }[] = [
   {
+    name: 'configure_playlist_discovery',
+    readOnly: false,
+    description:
+      'Set the complete retained-recommendation list and/or explicit reference-track set for an expected revision. Excluding an original from references keeps it in the playlist. Retain a recommendation before adding it as a reference. Omitted fields preserve existing choices.',
+  },
+  {
+    name: 'expand_playlist_draft',
+    readOnly: false,
+    description:
+      'Expand a fully resolved draft with balanced recommendations. Choose regenerate to replace unretained additions or add_more for another batch. Reuse requestKey with identical input for transport retries. Failures preserve the source revision.',
+  },
+  {
+    name: 'find_similar_tracks',
+    readOnly: true,
+    description:
+      'Recommend tracks similar to one library track, with a calibrated quality floor and alternate-version filtering. Ambiguous analysis failures are errors, not shortages.',
+  },
+  {
+    name: 'check_audiomuse_connection',
+    readOnly: true,
+    description:
+      'Check optional AudioMuse authentication, version, and calibration configuration. Does not analyze the library.',
+  },
+  {
+    name: 'discover_tracks',
+    readOnly: true,
+    description:
+      'Recommend Navidrome library tracks from a listening description using AudioMuse. Reports shortages; recommendations are not requested-song candidate matches. Save accepted recommendations into a draft, then preview and publish.',
+  },
+  {
     name: 'check_connection',
     readOnly: true,
     description: 'Check Navidrome connectivity and authentication without exposing credentials.',
@@ -36,7 +66,7 @@ const tools: { name: ToolName; readOnly: boolean; description: string }[] = [
     name: 'save_playlist_draft',
     readOnly: false,
     description:
-      'Create or replace an editable draft. Edits require expectedRevision; entries choose trackId, omit=true, or automatic resolution. Defaults to public.',
+      'Create or replace an editable draft. Edits require expectedRevision; entries choose trackId, omit=true, or automatic resolution. Preserve recommendation metadata when accepting discovery results; recommendation=null explicitly makes a selected recording supplied. Defaults to public.',
   },
   {
     name: 'get_playlist_draft',
@@ -88,7 +118,12 @@ export function createMcpServer(service: PlaylistService): McpServer {
           destructiveHint: false,
           idempotentHint:
             tool.readOnly ||
-            ['preview_playlist', 'publish_playlist', 'reconcile_operation'].includes(tool.name),
+            [
+              'preview_playlist',
+              'publish_playlist',
+              'reconcile_operation',
+              'expand_playlist_draft',
+            ].includes(tool.name),
           openWorldHint: ![
             'get_playlist_draft',
             'get_operation',

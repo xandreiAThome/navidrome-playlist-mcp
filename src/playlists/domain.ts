@@ -20,6 +20,19 @@ export const trackSchema = z.object({
 });
 export type Track = z.infer<typeof trackSchema>;
 export type Config = {
+  audiomuse?: {
+    url: string;
+    token: string;
+    server: string;
+    budgetMs: number;
+    calibration?: {
+      version: string;
+      indexModel: string;
+      report: string;
+      maxDistance: number;
+      minDescriptionSimilarity: number;
+    };
+  };
   url: string;
   username: string;
   password: string;
@@ -30,6 +43,11 @@ export type Config = {
   searchMaxPages: number;
 };
 export type ProblemCode =
+  | 'audiomuse_unavailable'
+  | 'audiomuse_error'
+  | 'analysis_unavailable'
+  | 'calibration_required'
+  | 'discovery_timeout'
   | 'configuration_error'
   | 'not_found'
   | 'stale_revision'
@@ -73,14 +91,40 @@ export const resolutionSchema = z.discriminatedUnion('status', [
 ]);
 export type Resolution = z.infer<typeof resolutionSchema>;
 
+export const recommendationSchema = z.object({
+  kind: z.enum(['description', 'similarity']),
+  referenceTrackId: text.optional(),
+  score: z.number().finite(),
+  retained: z.boolean().default(false),
+  uncertainAlternate: z.boolean().default(false),
+});
+export const recommendedTrackSchema = z.object({
+  track: trackSchema,
+  recommendation: recommendationSchema,
+});
+export type RecommendedTrack = z.infer<typeof recommendedTrackSchema>;
+export const discoveryResultSchema = z.object({
+  recommendations: z.array(recommendedTrackSchema),
+  target: z.number().int(),
+  shortfall: z.number().int(),
+  candidateLimitReached: z.boolean(),
+  warnings: z.array(z.string()),
+});
+export type DiscoveryResult = z.infer<typeof discoveryResultSchema>;
+
 export const entryInputSchema = z
   .object({
     request: requestedSongSchema,
     trackId: text.optional(),
     omit: z.literal(true).optional(),
+    recommendation: recommendationSchema.nullable().optional(),
   })
   .strict()
-  .refine((entry) => !(entry.trackId && entry.omit), 'Choose a track or omit, not both.');
+  .refine((entry) => !(entry.trackId && entry.omit), 'Choose a track or omit, not both.')
+  .refine(
+    (entry) => entry.recommendation === undefined || Boolean(entry.trackId),
+    'Recommendation provenance requires an explicit track selection.',
+  );
 export const saveDraftSchema = z
   .object({
     draftId: text.optional(),
@@ -105,6 +149,7 @@ export const entrySchema = z.object({
   track: trackSchema.optional(),
   omit: z.literal(true).optional(),
   resolution: resolutionSchema.optional(),
+  recommendation: recommendationSchema.optional(),
 });
 export type Entry = z.infer<typeof entrySchema>;
 export const draftSchema = z.object({
@@ -115,8 +160,27 @@ export const draftSchema = z.object({
   entries: z.array(entrySchema),
   previewed: z.boolean(),
   locked: z.boolean(),
+  referenceTrackIds: z.array(text).max(500).optional(),
 });
 export type Draft = z.infer<typeof draftSchema>;
+export const expandDraftSchema = draftRefSchema
+  .extend({
+    requestKey: text,
+    mode: z.enum(['regenerate', 'add_more']),
+    count: z.number().int().min(1).max(100).optional(),
+    allowAlternateVersions: z.boolean().default(false),
+  })
+  .strict();
+export const expansionResultSchema = z.object({
+  draft: draftSchema,
+  target: z.number().int(),
+  added: z.number().int(),
+  shortfall: z.number().int(),
+  capacityLimited: z.boolean(),
+  candidateLimitReached: z.boolean(),
+  warnings: z.array(z.string()),
+});
+export type ExpansionResult = z.infer<typeof expansionResultSchema>;
 export const publishSchema = draftRefSchema
   .extend({
     operationKey: text,
@@ -163,6 +227,24 @@ export const reconcileSchema = z
       });
   });
 export const toolSchemas = {
+  configure_playlist_discovery: draftRefSchema
+    .extend({
+      retainedTrackIds: z.array(text).max(500).optional(),
+      referenceTrackIds: z.array(text).max(500).optional(),
+    })
+    .strict(),
+  expand_playlist_draft: expandDraftSchema,
+  find_similar_tracks: z
+    .object({
+      trackId: text,
+      count: z.number().int().min(1).max(100).default(20),
+      allowAlternateVersions: z.boolean().default(false),
+    })
+    .strict(),
+  discover_tracks: z
+    .object({ description: text, count: z.number().int().min(1).max(100).default(20) })
+    .strict(),
+  check_audiomuse_connection: z.object({}).strict(),
   check_connection: z.object({}).strict(),
   search_tracks: z.object({ query: text }).strict(),
   resolve_tracks: z.object({ songs: z.array(requestedSongSchema).min(1).max(500) }).strict(),
@@ -201,6 +283,11 @@ export type Operation = z.infer<typeof operationSchema>;
 export type RemotePlaylist = { id: string; name: string; public?: boolean; tracks: Track[] };
 
 export type ToolData = {
+  configure_playlist_discovery: Draft;
+  expand_playlist_draft: ExpansionResult;
+  find_similar_tracks: DiscoveryResult;
+  discover_tracks: DiscoveryResult;
+  check_audiomuse_connection: { connected: boolean; version: string; calibrated: boolean };
   check_connection: { connected: boolean };
   search_tracks: { tracks: Track[]; complete: boolean };
   resolve_tracks: { resolutions: Resolution[] };

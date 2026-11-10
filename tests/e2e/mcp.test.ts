@@ -32,6 +32,11 @@ test('a local MCP client discovers tools and completes a previewed playlist work
     tools.map((tool) => tool.name).sort(),
     [
       'check_connection',
+      'check_audiomuse_connection',
+      'discover_tracks',
+      'find_similar_tracks',
+      'expand_playlist_draft',
+      'configure_playlist_discovery',
       'search_tracks',
       'resolve_tracks',
       'list_playlists',
@@ -51,6 +56,12 @@ test('a local MCP client discovers tools and completes a previewed playlist work
     return response.structuredContent as { status: string; data: Record<string, unknown> };
   };
   assert.equal((await call('check_connection', {})).data.connected, true);
+  const unavailable = await client.callTool({ name: 'check_audiomuse_connection', arguments: {} });
+  assert.equal(unavailable.isError, true);
+  assert.equal(
+    (unavailable.structuredContent as { status: string }).status,
+    'audiomuse_unavailable',
+  );
   const draft = (
     await call('save_playlist_draft', {
       name: 'From MCP',

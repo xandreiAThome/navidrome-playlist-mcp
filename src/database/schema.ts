@@ -50,3 +50,9 @@ export const operationKeys = sqliteTable('operation_keys', {
     .references(() => drafts.id),
   revision: integer().notNull(),
 });
+
+export const expansionReceipts = sqliteTable('expansion_receipts', {
+  requestKey: text('request_key').primaryKey(),
+  fingerprint: text().notNull(),
+  payload: text().notNull(),
+});

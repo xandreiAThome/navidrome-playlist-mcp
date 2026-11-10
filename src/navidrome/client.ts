@@ -20,6 +20,7 @@ export class Navidrome {
   private async request(
     endpoint: string,
     params: [string, string][] = [],
+    signal?: AbortSignal,
   ): Promise<Record<string, unknown>> {
     const salt = randomBytes(16).toString('hex');
     const token = createHash('md5')
@@ -37,7 +38,9 @@ export class Navidrome {
     ]).toString();
     try {
       const response = await fetch(url, {
-        signal: AbortSignal.timeout(this.config.timeoutMs),
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(this.config.timeoutMs)])
+          : AbortSignal.timeout(this.config.timeoutMs),
         redirect: 'error',
       });
       if (!response.ok) throw new Error('HTTP failure');
@@ -58,8 +61,8 @@ export class Navidrome {
     return { connected: true };
   }
 
-  async getSong(id: string): Promise<Track> {
-    const body = await this.request('getSong', [['id', id]]);
+  async getSong(id: string, signal?: AbortSignal): Promise<Track> {
+    const body = await this.request('getSong', [['id', id]], signal);
     const track = trackSchema.safeParse(body.song);
     if (!track.success || track.data.id !== id)
       throw new Problem('navidrome_error', 'Navidrome returned an invalid track.');

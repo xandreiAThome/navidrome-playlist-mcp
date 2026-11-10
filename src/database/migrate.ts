@@ -9,7 +9,7 @@ export function migrate(database: Database.Database) {
       const current = database
         .prepare('SELECT MAX(version) AS version FROM schema_migrations')
         .get() as { version: number | null };
-      const files = ['0001_initial.sql', '0002_operation_state.sql'];
+      const files = ['0001_initial.sql', '0002_operation_state.sql', '0003_discovery.sql'];
       if ((current.version ?? 0) > files.length)
         throw new Error('Database schema is newer than this application.');
       for (const [index, file] of files.entries()) {

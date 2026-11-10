@@ -13,6 +13,8 @@ import type { Navidrome } from '../navidrome/client.ts';
 import { match } from './matching.ts';
 import type { Storage } from '../database/storage.ts';
 import type { Publication } from './publication.ts';
+import type { AudioMuse } from '../discovery/audiomuse.ts';
+import type { Discovery } from '../discovery/service.ts';
 
 export class PlaylistService {
   private readonly handlers: ToolHandlers;
@@ -20,12 +22,20 @@ export class PlaylistService {
     private readonly storage: Storage,
     navidrome: Navidrome,
     publication: Publication,
+    audiomuse: AudioMuse,
+    discovery: Discovery,
   ) {
     const resolve = async (song: RequestedSong) => {
       const found = await navidrome.search(song.title);
       return match(song, found.tracks, found.complete);
     };
     this.handlers = {
+      configure_playlist_discovery: (value) => discovery.configure(value),
+      expand_playlist_draft: (value) => discovery.expand(value),
+      find_similar_tracks: ({ trackId, count, allowAlternateVersions }) =>
+        discovery.similar(trackId, count, allowAlternateVersions),
+      discover_tracks: ({ description, count }) => discovery.describe(description, count),
+      check_audiomuse_connection: () => audiomuse.checkConnection(),
       check_connection: () => navidrome.ping(),
       search_tracks: ({ query }) => navidrome.search(query),
       resolve_tracks: async ({ songs }) => {
@@ -43,14 +53,20 @@ export class PlaylistService {
           name: name ?? source.name,
           visibility: source.visibility,
           entries: source.entries,
+          referenceTrackIds: source.referenceTrackIds,
         });
       },
       save_playlist_draft: async (value) => {
+        const previous = value.draftId ? storage.getDraft(value.draftId) : undefined;
         const entries: Entry[] = [];
         for (const entry of value.entries) {
           if (entry.omit) entries.push({ request: entry.request, omit: true });
           else if (entry.trackId)
-            entries.push({ request: entry.request, track: await navidrome.getSong(entry.trackId) });
+            entries.push({
+              request: entry.request,
+              track: await navidrome.getSong(entry.trackId),
+              ...(entry.recommendation ? { recommendation: entry.recommendation } : {}),
+            });
           else {
             const resolution = await resolve(entry.request);
             entries.push({
@@ -60,8 +76,33 @@ export class PlaylistService {
             });
           }
         }
+        for (const [index, entry] of entries.entries()) {
+          if (
+            entry.track &&
+            !entry.recommendation &&
+            value.entries[index]?.recommendation !== null
+          ) {
+            const recommendation = previous?.entries.find(
+              (old) => old.track?.id === entry.track!.id && old.recommendation,
+            )?.recommendation;
+            if (recommendation) entry.recommendation = recommendation;
+          }
+        }
+        const referenceTrackIds = previous?.referenceTrackIds?.filter((id) =>
+          entries.some(
+            (entry) =>
+              entry.track?.id === id &&
+              !entry.omit &&
+              (!entry.recommendation || entry.recommendation.retained),
+          ),
+        );
         return storage.saveDraft(
-          { name: value.name, visibility: value.visibility, entries },
+          {
+            name: value.name,
+            visibility: value.visibility,
+            entries,
+            ...(referenceTrackIds ? { referenceTrackIds } : {}),
+          },
           value.draftId,
           value.expectedRevision,
         );

@@ -4,10 +4,22 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { mkdirSync, chmodSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { Problem, draftSchema, operationSchema } from '../playlists/domain.ts';
-import type { Config, Draft, Operation } from '../playlists/domain.ts';
+import {
+  Problem,
+  draftSchema,
+  operationSchema,
+  expansionResultSchema,
+} from '../playlists/domain.ts';
+import type { Config, Draft, Operation, ExpansionResult } from '../playlists/domain.ts';
 import { migrate } from './migrate.ts';
-import { identity, drafts, revisions, operations, operationKeys } from './schema.ts';
+import {
+  identity,
+  drafts,
+  revisions,
+  operations,
+  operationKeys,
+  expansionReceipts,
+} from './schema.ts';
 
 function operationValues(operation: Operation) {
   return {
@@ -119,6 +131,42 @@ export class Storage {
         .where(and(eq(revisions.draftId, id), eq(revisions.revision, revision)))
         .run();
       return { ...draft, previewed: true };
+    });
+  }
+
+  expansionReceipt(key: string, fingerprint: string): ExpansionResult | undefined {
+    const row = this.db
+      .select()
+      .from(expansionReceipts)
+      .where(eq(expansionReceipts.requestKey, key))
+      .get();
+    if (!row) return undefined;
+    if (row.fingerprint !== fingerprint)
+      throw new Problem(
+        'operation_key_conflict',
+        'This request key belongs to a different expansion.',
+      );
+    return expansionResultSchema.parse(JSON.parse(row.payload));
+  }
+
+  saveExpansion(
+    value: Omit<Draft, 'id' | 'revision' | 'previewed' | 'locked'>,
+    id: string,
+    expected: number,
+    key: string,
+    fingerprint: string,
+    outcome: Omit<ExpansionResult, 'draft'>,
+  ): ExpansionResult {
+    return this.transaction(() => {
+      const previous = this.expansionReceipt(key, fingerprint);
+      if (previous) return previous;
+      const draft = this.saveDraft(value, id, expected);
+      const result = { ...outcome, draft };
+      this.db
+        .insert(expansionReceipts)
+        .values({ requestKey: key, fingerprint, payload: JSON.stringify(result) })
+        .run();
+      return result;
     });
   }
 
