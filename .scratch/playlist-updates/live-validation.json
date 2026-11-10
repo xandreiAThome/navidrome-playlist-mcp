@@ -1,0 +1,33 @@
+{
+  "at": "2026-11-10T08:49:26.358Z",
+  "checks": [
+    {
+      "visibility": "public",
+      "playlistId": "22sK2qT4malUUkE0XUl08X",
+      "updateOperationId": "fc4e500d-a376-4510-8319-8d493b755bca",
+      "orderedTrackIds": [
+        "2R5guv6IQJfaqWmSBz1bMm",
+        "6l92HuuXVo1KZ9vReHFRYW",
+        "2R5guv6IQJfaqWmSBz1bMm",
+        "1kXLf9haYMnXcS0EBBSXxL",
+        "1kXLf9haYMnXcS0EBBSXxL"
+      ],
+      "metadataPreserved": true,
+      "retryDidNotAppend": true,
+      "emptyAdditionNoChanges": true
+    }
+  ],
+  "playlists": [
+    {
+      "id": "22sK2qT4malUUkE0XUl08X",
+      "name": "MCP append validation 2026-11-10T08:49:26.358Z public",
+      "visibility": "public",
+      "creationOperationId": "4381430f-6eda-4817-a0f6-5f6f97df4cf9"
+    }
+  ],
+  "server": {
+    "type": "navidrome",
+    "serverVersion": "0.64.2 (10114574)",
+    "protocolVersion": "1.16.1"
+  }
+}
