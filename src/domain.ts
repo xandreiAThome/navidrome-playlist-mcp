@@ -49,12 +49,34 @@ export const publishSchema = draftRefSchema.extend({
   operationKey: text,
   approval: z.object({ revision: z.number().int().positive(), confirmed: z.literal(true) }).strict().optional(),
 }).strict();
-const recoveryFields = { operationId: text, recoveryKey: text, expectedRecoveryVersion: z.number().int().nonnegative() };
-export const reconcileSchema = z.discriminatedUnion('action', [
-  z.object({ ...recoveryFields, action: z.literal('adopt'), playlistId: text, reason: text }).strict(),
-  z.object({ ...recoveryFields, action: z.literal('confirm_not_created'), reason: text }).strict(),
-  z.object({ ...recoveryFields, action: z.literal('resume') }).strict(),
-]);
+export const reconcileSchema = z.object({
+  operationId: text, recoveryKey: text, expectedRecoveryVersion: z.number().int().nonnegative(),
+  action: z.enum(['adopt', 'confirm_not_created', 'resume']), playlistId: text.optional(), reason: text.optional(),
+}).strict().superRefine((value, context) => {
+  if (value.action === 'adopt' && !value.playlistId)
+    context.addIssue({ code: 'custom', path: ['playlistId'], message: 'Adoption requires a playlist ID.' });
+  if (value.action !== 'resume' && !value.reason)
+    context.addIssue({ code: 'custom', path: ['reason'], message: 'This recovery action requires an explicit reason.' });
+  if (value.action !== 'adopt' && value.playlistId)
+    context.addIssue({ code: 'custom', path: ['playlistId'], message: 'Only adoption accepts a playlist ID.' });
+  if (value.action === 'resume' && value.reason)
+    context.addIssue({ code: 'custom', path: ['reason'], message: 'Resume does not accept an assertion reason.' });
+});
+export const toolSchemas = {
+  check_connection: z.object({}).strict(),
+  search_tracks: z.object({ query: text }).strict(),
+  resolve_tracks: z.object({ songs: z.array(requestedSongSchema).min(1).max(500) }).strict(),
+  list_playlists: z.object({}).strict(),
+  get_playlist: z.object({ playlistId: text }).strict(),
+  save_playlist_draft: saveDraftSchema,
+  get_playlist_draft: getDraftSchema,
+  copy_playlist_draft: draftRefSchema.extend({ name: text.optional() }).strict(),
+  preview_playlist: draftRefSchema,
+  publish_playlist: publishSchema,
+  get_operation: z.object({ operationId: text }).strict(),
+  reconcile_operation: reconcileSchema,
+};
+export type ToolName = keyof typeof toolSchemas;
 export type Operation = {
   id: string; draftId: string; revision: number; operationKey: string;
   status: 'creating' | 'unknown_outcome' | 'incomplete' | 'verification_failed' | 'succeeded';

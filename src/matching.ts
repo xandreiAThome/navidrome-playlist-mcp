@@ -11,7 +11,9 @@ function baseTitle(value: string): string {
     previous = title;
     title = title.replace(/\s*[([][^)\]]+[)\]]\s*$/, '').trim();
   } while (title !== previous);
-  return normalize(title.replace(/\s+-\s+.*(?:live|acoustic|remaster|remix|demo|instrumental|version|edit|alternate take|mix).*$/i, ''));
+  // Treat subtitles conservatively as possible versions, including unfamiliar
+  // names such as "Extended". Full requested titles still require exact matches.
+  return normalize(title.replace(/\s+[-–—]\s+.+$/, ''));
 }
 
 export function match(request: RequestedSong, tracks: Track[], complete: boolean): Resolution {

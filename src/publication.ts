@@ -3,6 +3,10 @@ import type { Config, Draft, Operation } from './domain.ts';
 import type { Storage } from './storage.ts';
 import type { Navidrome } from './navidrome.ts';
 
+function selectedTracks(draft: Draft) {
+  return draft.entries.flatMap(entry => entry.track && !entry.omit ? [entry.track] : []);
+}
+
 export class Publication {
   private readonly storage: Storage;
   private readonly navidrome: Navidrome;
@@ -28,7 +32,7 @@ export class Publication {
       throw new Problem('approval_required', 'Assert human approval of this exact revision.');
     if (draft.entries.some(entry => !entry.omit && !entry.track))
       throw new Problem('unresolved_songs', 'Select or explicitly omit every requested song.');
-    const selected = draft.entries.flatMap(entry => entry.track && !entry.omit ? [entry.track] : []);
+    const selected = selectedTracks(draft);
     if (!selected.length) throw new Problem('empty_playlist', 'Select at least one library track.');
     await this.revalidate(draft);
     const claim = this.storage.claimPublish(draft.id, draft.revision, value.operationKey, this.leaseMs);
@@ -37,7 +41,7 @@ export class Publication {
   }
 
   private async revalidate(draft: Draft) {
-    for (const track of draft.entries.flatMap(entry => entry.track && !entry.omit ? [entry.track] : [])) {
+    for (const track of selectedTracks(draft)) {
       let current;
       try { current = await this.navidrome.getSong(track.id); }
       catch { throw new Problem('library_changed', 'A selected track is unavailable; revalidate the draft.', { trackId: track.id }); }
@@ -49,8 +53,7 @@ export class Publication {
   private async create(draft: Draft, pending: Operation, token: string): Promise<Operation> {
     let id: string;
     try {
-      id = await this.navidrome.createPlaylist(draft.name,
-        draft.entries.flatMap(entry => entry.track && !entry.omit ? [entry.track.id] : []));
+      id = await this.navidrome.createPlaylist(draft.name, selectedTracks(draft).map(track => track.id));
     } catch {
       return this.storage.updateOperation({ ...pending, status: 'unknown_outcome',
         details: { reason: 'creation_not_confirmed', nextAction: 'reconcile_operation' } }, token, this.leaseMs, true);
@@ -63,21 +66,21 @@ export class Publication {
   private async finish(draft: Draft, operation: Operation, token: string): Promise<Operation> {
     try {
       await this.navidrome.setVisibility(operation.playlistId!, draft.visibility);
-    operation = this.storage.updateOperation({ ...operation, phase: 'verify' }, token, this.leaseMs);
-    const playlist = await this.navidrome.getPlaylist(operation.playlistId!);
-    const expectedIds = draft.entries.flatMap(entry => entry.track && !entry.omit ? [entry.track.id] : []);
-    const actualIds = playlist.tracks.map(track => track.id);
-    if (JSON.stringify(expectedIds) !== JSON.stringify(actualIds) || playlist.name !== draft.name) {
-      return this.storage.updateOperation({ ...operation, status: 'verification_failed', details: {
-        expectedIds, actualIds, expectedName: draft.name, actualName: playlist.name,
-        expectedPublic: draft.visibility === 'public', actualPublic: playlist.public ?? null,
-      } }, token, this.leaseMs, true);
-    }
-    if (playlist.public !== (draft.visibility === 'public')) {
-      return this.storage.updateOperation({ ...operation, status: 'incomplete', phase: 'visibility', details: {
-        reason: 'visibility_not_verified', expectedPublic: draft.visibility === 'public', actualPublic: playlist.public ?? null,
-      } }, token, this.leaseMs, true);
-    }
+      operation = this.storage.updateOperation({ ...operation, phase: 'verify' }, token, this.leaseMs);
+      const playlist = await this.navidrome.getPlaylist(operation.playlistId!);
+      const expectedIds = selectedTracks(draft).map(track => track.id);
+      const actualIds = playlist.tracks.map(track => track.id);
+      if (JSON.stringify(expectedIds) !== JSON.stringify(actualIds) || playlist.name !== draft.name) {
+        return this.storage.updateOperation({ ...operation, status: 'verification_failed', details: {
+          expectedIds, actualIds, expectedName: draft.name, actualName: playlist.name,
+          expectedPublic: draft.visibility === 'public', actualPublic: playlist.public ?? null,
+        } }, token, this.leaseMs, true);
+      }
+      if (playlist.public !== (draft.visibility === 'public')) {
+        return this.storage.updateOperation({ ...operation, status: 'incomplete', phase: 'visibility', details: {
+          reason: 'visibility_not_verified', expectedPublic: draft.visibility === 'public', actualPublic: playlist.public ?? null,
+        } }, token, this.leaseMs, true);
+      }
       return this.storage.updateOperation({ ...operation, phase: 'done', status: 'succeeded', details: undefined }, token, this.leaseMs, true);
     } catch (error) {
       if (error instanceof Problem && error.code === 'operation_busy') throw error;
@@ -111,8 +114,8 @@ export class Publication {
     if (value.action === 'resume') return this.finish(draft, operation, token);
     if (value.action === 'adopt') {
       try {
-        const playlist = await this.navidrome.getPlaylist(value.playlistId);
-        const ids = draft.entries.flatMap(entry => entry.track && !entry.omit ? [entry.track.id] : []);
+        const playlist = await this.navidrome.getPlaylist(value.playlistId!);
+        const ids = selectedTracks(draft).map(track => track.id);
         if (playlist.name !== draft.name || JSON.stringify(playlist.tracks.map(track => track.id)) !== JSON.stringify(ids))
           throw new Problem('adoption_mismatch', 'The specified playlist does not match this draft.');
       } catch (error) {

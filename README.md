@@ -162,7 +162,7 @@ another draft or revision. Copy the draft to intentionally create another playli
 Matching uses direct paginated Navidrome searches, conservative Unicode/case/
 punctuation normalization, and title/artist comparisons. Optional album and
 version constraints narrow candidates; a supplied duration must be within two
-seconds. Recognized version suffixes remain distinct; a neutral title with studio
+seconds. Parenthesized and dash-separated suffixes remain distinct; a neutral title with studio
 and live candidates is ambiguous. A sole versioned alternative is not silently
 substituted for an unqualified exact title.
 

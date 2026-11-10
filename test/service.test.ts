@@ -70,6 +70,22 @@ test('alternate takes are candidates rather than silently ignored version distin
   assert.deepEqual(resolutions.map(r => [r.status, r.track?.id]), [['ambiguous', undefined], ['selected', 'alternate']]);
 });
 
+test('extended versions remain candidates for an unqualified title', async t => {
+  const remote = await navidromeFixture();
+  t.after(() => remote.close());
+  remote.songs.push({ id: 'extended', title: 'Teardrop - Extended', artist: 'Massive Attack' });
+  const service = new PlaylistService(remote.config);
+  t.after(() => service.close());
+  const { resolutions } = await ok<{ resolutions: { status: string; track?: { id: string }; candidates: { id: string }[] }[] }>(
+    service, 'resolve_tracks', { songs: [
+      { title: 'Teardrop', artist: 'Massive Attack' },
+      { title: 'Teardrop - Extended', artist: 'Massive Attack' },
+    ] });
+  assert.deepEqual(resolutions[0]!.candidates.map(c => c.id), ['other', 'extended']);
+  assert.equal(resolutions[0]!.status, 'ambiguous');
+  assert.equal(resolutions[1]!.track?.id, 'extended');
+});
+
 test('drafts survive restart, validate real track IDs, and reject stale edits', async t => {
   const remote = await navidromeFixture();
   t.after(() => remote.close());
