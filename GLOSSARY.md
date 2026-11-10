@@ -19,6 +19,19 @@ A named, ordered collection of library tracks in Navidrome.
 A library track that may satisfy a requested song, but has not yet been selected for it.
 _Avoid_: Selected track
 
+**Recommended track**:
+A library track suggested because it fits a listening description or other songs, rather than as a match for a requested song. A recommendation is not a selection until accepted into a playlist draft.
+_Avoid_: Candidate match
+
+**Playlist expansion**:
+Adding recommended tracks to a playlist draft based on a supplied song list.
+
+**Reference track**:
+A distinct selected library track whose sound guides recommendations. Supplied songs establish the initial reference tracks; retaining a recommendation does not itself make it a reference track.
+
+**Retained recommendation**:
+A recommended track the user explicitly chose to keep in a playlist draft. It is protected from replacement when recommendations are regenerated.
+
 **Ambiguous requested song**:
 A requested song with multiple plausible candidate matches and no selected track. It requires an explicit selection or omission before publishing.
 
