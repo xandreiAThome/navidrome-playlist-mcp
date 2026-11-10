@@ -1,0 +1,26 @@
+{
+  "name": "navidrome-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@12.18.0",
+  "type": "module",
+  "description": "Local agent-driven Navidrome playlist service",
+  "engines": {
+    "node": ">=26.13.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/cli.js",
+    "test": "pnpm build && node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.4.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}
