@@ -11,6 +11,33 @@ const envelopeSchema = z.object({
     .passthrough(),
 });
 
+const playlistMetadataSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  public: z.boolean().optional(),
+  owner: z.string().optional(),
+  readonly: z.boolean().optional(),
+});
+
+function playlistVisibility(
+  playlist: z.infer<typeof playlistMetadataSchema>,
+  envelope: Record<string, unknown>,
+): boolean | undefined {
+  if (playlist.public !== undefined) return playlist.public;
+  // Navidrome 0.64.2 responses.Playlist uses json:"public,omitempty" for a bool.
+  // Full responses include owner and readonly; minimal-client responses do not.
+  // Keep unknown servers/versions conservative instead of defaulting all omissions.
+  if (
+    envelope.type === 'navidrome' &&
+    typeof envelope.serverVersion === 'string' &&
+    /^0\.64\.2(?: |$)/.test(envelope.serverVersion) &&
+    playlist.owner !== undefined &&
+    playlist.readonly !== undefined
+  )
+    return false;
+  return undefined;
+}
+
 export class Navidrome {
   private readonly config: Config;
   constructor(config: Config) {
@@ -99,15 +126,18 @@ export class Navidrome {
     const body = await this.request('getPlaylist', [['id', id]]);
     const parsed = z
       .object({
-        id: z.string(),
-        name: z.string(),
-        public: z.boolean().optional(),
+        ...playlistMetadataSchema.shape,
         entry: z.array(trackSchema).default([]),
       })
       .safeParse(body.playlist);
     if (!parsed.success || parsed.data.id !== id)
       throw new Problem('navidrome_error', 'Navidrome returned an invalid playlist.');
-    return { id, name: parsed.data.name, public: parsed.data.public, tracks: parsed.data.entry };
+    return {
+      id,
+      name: parsed.data.name,
+      public: playlistVisibility(parsed.data, body),
+      tracks: parsed.data.entry,
+    };
   }
 
   async listPlaylists() {
@@ -117,9 +147,7 @@ export class Navidrome {
         playlist: z
           .array(
             z.object({
-              id: z.string(),
-              name: z.string(),
-              public: z.boolean().optional(),
+              ...playlistMetadataSchema.shape,
               songCount: z.number().optional(),
             }),
           )
@@ -128,7 +156,14 @@ export class Navidrome {
       .safeParse(body.playlists ?? {});
     if (!parsed.success)
       throw new Problem('navidrome_error', 'Navidrome returned an invalid playlist list.');
-    return { playlists: parsed.data.playlist };
+    return {
+      playlists: parsed.data.playlist.map((playlist) => ({
+        id: playlist.id,
+        name: playlist.name,
+        public: playlistVisibility(playlist, body),
+        ...(playlist.songCount !== undefined ? { songCount: playlist.songCount } : {}),
+      })),
+    };
   }
 
   async search(query: string): Promise<{ tracks: Track[]; complete: boolean }> {

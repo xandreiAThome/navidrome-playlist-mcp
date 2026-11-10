@@ -15,6 +15,20 @@
       "metadataPreserved": true,
       "retryDidNotAppend": true,
       "emptyAdditionNoChanges": true
+    },
+    {
+      "visibility": "private",
+      "playlistId": "3Te1v06VguehZNvJLLLfni",
+      "updateOperationId": "ab6afc1e-90cb-4048-9143-e68a5ece8f63",
+      "orderedTrackIds": [
+        "10snidDi1myQqwdeDrWrAI",
+        "6KcEkxuZLHC4H1HOr7K2p0",
+        "10snidDi1myQqwdeDrWrAI",
+        "4PFs9p5k5stnzfofi5eiOv",
+        "4PFs9p5k5stnzfofi5eiOv"
+      ],
+      "metadataPreserved": true,
+      "retryDidNotAppend": true
     }
   ],
   "playlists": [
@@ -23,11 +37,31 @@
       "name": "MCP append validation 2026-11-10T08:49:26.358Z public",
       "visibility": "public",
       "creationOperationId": "4381430f-6eda-4817-a0f6-5f6f97df4cf9"
+    },
+    {
+      "id": "3Te1v06VguehZNvJLLLfni",
+      "name": "MCP append validation 2026-11-10T08:48:45.092Z private",
+      "visibility": "private",
+      "creationOperationId": "e0aa5510-3851-4516-a281-9c3a76d6041d"
     }
   ],
   "server": {
     "type": "navidrome",
     "serverVersion": "0.64.2 (10114574)",
     "protocolVersion": "1.16.1"
-  }
+  },
+  "followupAt": "2026-11-10T08:53:07.130Z",
+  "secondaryAccountConfigured": false,
+  "cleanup": [
+    {
+      "playlistId": "3Te1v06VguehZNvJLLLfni",
+      "deleted": true,
+      "verifiedAbsent": true
+    },
+    {
+      "playlistId": "22sK2qT4malUUkE0XUl08X",
+      "deleted": true,
+      "verifiedAbsent": true
+    }
+  ]
 }

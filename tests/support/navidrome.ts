@@ -23,6 +23,10 @@ export async function navidromeFixture() {
   ];
   const playlists: RemotePlaylist[] = [];
   const controls = {
+    omitPrivateVisibility: false,
+    serverType: '',
+    serverVersion: '',
+    minimalPlaylistResponse: false,
     dropCreateResponse: false,
     visibilityFails: false,
     dropLastTrack: false,
@@ -42,7 +46,15 @@ export async function navidromeFixture() {
     const send = (body: object) => {
       res.setHeader('Content-Type', 'application/json');
       res.end(
-        JSON.stringify({ 'subsonic-response': { status: 'ok', version: '1.16.1', ...body } }),
+        JSON.stringify({
+          'subsonic-response': {
+            status: 'ok',
+            version: '1.16.1',
+            type: controls.serverType,
+            serverVersion: controls.serverVersion,
+            ...body,
+          },
+        }),
       );
     };
     const fail = () =>
@@ -87,13 +99,23 @@ export async function navidromeFixture() {
       else fail();
       return;
     }
+    const playlistResponse = (playlist: RemotePlaylist) => {
+      const { public: visibility, ...rest } = playlist;
+      return {
+        ...rest,
+        ...(controls.omitPrivateVisibility && !visibility ? {} : { public: visibility }),
+        ...(controls.serverType === 'navidrome' && !controls.minimalPlaylistResponse
+          ? { owner: 'tester', readonly: false }
+          : {}),
+      };
+    };
     if (endpoint === 'getPlaylists') {
-      send({ playlists: { playlist: playlists } });
+      send({ playlists: { playlist: playlists.map(playlistResponse) } });
       return;
     }
     if (endpoint === 'getPlaylist') {
       const playlist = playlists.find((v) => v.id === p.get('id'));
-      if (playlist) send({ playlist });
+      if (playlist) send({ playlist: playlistResponse(playlist) });
       else fail();
       return;
     }

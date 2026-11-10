@@ -240,3 +240,8 @@ existing ID. Conflict detection is best effort against other Navidrome clients.
 Compatibility of ordering, repeated IDs, metadata preservation, and ownership
 restrictions on the deployed Navidrome version still requires release validation;
 local HTTP fixtures do not establish deployed compatibility.
+
+For Navidrome 0.64.2, full JSON playlist responses omit `public` when false.
+The adapter recognizes that version's full responses and preserves private
+visibility. Missing visibility from other server versions or minimal responses
+remains unknown and prevents appending until compatibility is established.

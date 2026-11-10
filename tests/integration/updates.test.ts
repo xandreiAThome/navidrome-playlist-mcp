@@ -206,3 +206,47 @@ test('unexpected append results require explicit reconciliation and never trigge
   expect(remote.controls.appendRequests).toBe(1);
   expect(remote.controls.creationRequests).toBe(0);
 });
+
+test('Navidrome 0.64.2 omitted false visibility permits private append while unverified responses stay blocked', async (t) => {
+  const remote = await navidromeFixture();
+  t.onTestFinished(() => remote.close());
+  remote.controls.serverType = 'navidrome';
+  remote.controls.serverVersion = '0.64.2 (10114574)';
+  remote.controls.omitPrivateVisibility = true;
+  remote.playlists.push({
+    id: 'private',
+    name: 'Private',
+    public: false,
+    entry: [remote.songs[0]!],
+  });
+  const app = createApp(remote.config);
+  t.onTestFinished(() => app.close());
+  const saved = await app.execute('save_playlist_update', {
+    playlistId: 'private',
+    entries: [{ request: { title: 'Teardrop', artist: 'Massive Attack' }, trackId: 'other' }],
+  });
+  expect(saved.status).toBe('ok');
+  const ref = { draftId: (saved.data as { id: string }).id, revision: 1 };
+  expect((await app.execute('list_playlists', {})).data).toMatchObject({
+    playlists: [{ id: 'private', public: false }],
+  });
+  await app.execute('preview_playlist_update', ref);
+  expect(
+    (await app.execute('apply_playlist_update', { ...ref, operationKey: 'omitted-private' })).data,
+  ).toMatchObject({ status: 'succeeded' });
+  expect(remote.playlists[0]).toMatchObject({ public: false, name: 'Private' });
+  expect(remote.playlists[0]!.entry.map((t) => t.id)).toEqual(['studio', 'other']);
+  for (const [type, version, minimal] of [
+    ['other-server', '0.64.2', false],
+    ['navidrome', '0.65.0', false],
+    ['navidrome', '0.64.2', true],
+  ] as const) {
+    remote.controls.serverType = type;
+    remote.controls.serverVersion = version;
+    remote.controls.minimalPlaylistResponse = minimal;
+    expect(
+      (await app.execute('save_playlist_update', { playlistId: 'private', entries: [] })).status,
+    ).toBe('navidrome_error');
+  }
+  expect(remote.controls.appendRequests).toBe(1);
+});
