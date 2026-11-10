@@ -108,6 +108,54 @@ See [AudioMuse setup](docs/discovery.md) for connection details and the
 [calibration guide](docs/calibration.md) for commands to collect, rate, and verify
 recommendations.
 
+## Available tools
+
+Your MCP client exposes these tools to your assistant. Draft edits stay local;
+`publish_playlist` creates a playlist in Navidrome and `apply_playlist_update`
+appends to an existing one. Recovery tools can also complete remote writes.
+
+| Library tool       | Purpose                                                |
+| ------------------ | ------------------------------------------------------ |
+| `check_connection` | Check Navidrome connectivity and authentication.       |
+| `search_tracks`    | Search the library for recordings.                     |
+| `resolve_tracks`   | Match an ordered song list and flag uncertain matches. |
+| `list_playlists`   | List existing playlists and their IDs.                 |
+| `get_playlist`     | Read a playlist's ordered tracks and visibility.       |
+
+| New playlist tool     | Purpose                                                    |
+| --------------------- | ---------------------------------------------------------- |
+| `save_playlist_draft` | Create or edit a draft with selected tracks and omissions. |
+| `get_playlist_draft`  | Read a draft or a saved revision.                          |
+| `copy_playlist_draft` | Copy a revision into a new editable draft.                 |
+| `preview_playlist`    | Review and record the exact revision to publish.           |
+| `publish_playlist`    | Create a new playlist from a previewed revision.           |
+| `get_operation`       | Inspect a publication's outcome and recovery state.        |
+| `reconcile_operation` | Recover an incomplete or uncertain publication.            |
+
+| Existing playlist tool      | Purpose                                                       |
+| --------------------------- | ------------------------------------------------------------- |
+| `save_playlist_update`      | Draft additions to a playlist, with optional reference songs. |
+| `get_playlist_update`       | Read an update draft or a saved revision.                     |
+| `preview_playlist_update`   | Review additions and the full resulting track order.          |
+| `refresh_playlist_update`   | Refresh the target snapshot after a conflict.                 |
+| `apply_playlist_update`     | Append previewed additions, preserving name and visibility.   |
+| `get_update_operation`      | Inspect an append's outcome and compare playlist states.      |
+| `reconcile_playlist_update` | Resolve an uncertain append after external investigation.     |
+
+| Recommendation tool            | Purpose                                                         |
+| ------------------------------ | --------------------------------------------------------------- |
+| `check_audiomuse_connection`   | Check AudioMuse connectivity and calibration configuration.     |
+| `discover_tracks`              | Find library tracks from a listening description.               |
+| `find_similar_tracks`          | Find tracks similar to one library recording.                   |
+| `configure_playlist_discovery` | Choose a draft's reference tracks and retained recommendations. |
+| `expand_playlist_draft`        | Add recommendations to a resolved new-playlist draft.           |
+| `expand_playlist_update`       | Recommend additions using an update's reference songs.          |
+
+Discovery and recommendation generation require the optional AudioMuse setup
+described above. Reference and retention choices are saved locally.
+See [playlist workflows and recovery](docs/playlist-workflows.md) for usage and
+retry rules.
+
 ## A few things to know
 
 - New playlists default to public. Ask for private when you want it.
