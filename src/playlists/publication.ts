@@ -1,10 +1,20 @@
 import { Problem } from './domain.ts';
-import type { Config, Draft, Operation, ToolInput } from './domain.ts';
+import type { Config, Draft, Operation, RemotePlaylist, ToolInput } from './domain.ts';
 import type { Storage } from '../database/storage.ts';
 import type { Navidrome } from '../navidrome/client.ts';
 
 function selectedTracks(draft: Draft) {
   return draft.entries.flatMap((entry) => (entry.track && !entry.omit ? [entry.track] : []));
+}
+
+function compareContents(draft: Draft, playlist: RemotePlaylist) {
+  const expectedIds = selectedTracks(draft).map((track) => track.id);
+  const actualIds = playlist.tracks.map((track) => track.id);
+  return {
+    matches:
+      draft.name === playlist.name && JSON.stringify(expectedIds) === JSON.stringify(actualIds),
+    details: { expectedIds, actualIds, expectedName: draft.name, actualName: playlist.name },
+  };
 }
 
 export class Publication {
@@ -105,21 +115,14 @@ export class Publication {
         this.leaseMs,
       );
       const playlist = await this.navidrome.getPlaylist(operation.playlistId!);
-      const expectedIds = selectedTracks(draft).map((track) => track.id);
-      const actualIds = playlist.tracks.map((track) => track.id);
-      if (
-        JSON.stringify(expectedIds) !== JSON.stringify(actualIds) ||
-        playlist.name !== draft.name
-      ) {
+      const content = compareContents(draft, playlist);
+      if (!content.matches) {
         return this.storage.updateOperation(
           {
             ...operation,
             status: 'verification_failed',
             details: {
-              expectedIds,
-              actualIds,
-              expectedName: draft.name,
-              actualName: playlist.name,
+              ...content.details,
               expectedPublic: draft.visibility === 'public',
               actualPublic: playlist.public ?? null,
             },
@@ -222,11 +225,7 @@ export class Publication {
     if (value.action === 'adopt') {
       try {
         const playlist = await this.navidrome.getPlaylist(value.playlistId!);
-        const ids = selectedTracks(draft).map((track) => track.id);
-        if (
-          playlist.name !== draft.name ||
-          JSON.stringify(playlist.tracks.map((track) => track.id)) !== JSON.stringify(ids)
-        )
+        if (!compareContents(draft, playlist).matches)
           throw new Problem(
             'adoption_mismatch',
             'The specified playlist does not match this draft.',
