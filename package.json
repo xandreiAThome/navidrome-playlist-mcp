@@ -12,15 +12,31 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "start": "node dist/cli.js",
-    "test": "pnpm build && node --test test/*.test.ts"
+    "test": "pnpm build && vitest run",
+    "test:integration": "vitest run --project integration",
+    "test:watch": "vitest --project integration",
+    "test:coverage": "pnpm build && vitest run --coverage",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.4.0",
+    "better-sqlite3": "^13.0.3",
+    "drizzle-orm": "^0.45.4",
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@modelcontextprotocol/client": "2.4.0",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.6",
-    "typescript": "^7.0.2"
+    "@vitest/coverage-v8": "^5.1.0",
+    "eslint": "^10.14.0",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.1.0"
   }
 }

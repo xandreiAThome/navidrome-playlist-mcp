@@ -10,8 +10,9 @@ There is no browser UI, embedded model, HTTP listener, or existing-playlist edit
 
 ## Install and build
 
-Requires Node **26.13.0 or later** and pnpm. This project uses Node's built-in
-SQLite API, whose release-candidate status is an accepted architectural choice.
+Use Node **26.13.0 LTS** (pinned in `.nvmrc`) and pnpm. SQLite uses Drizzle ORM
+with the native `better-sqlite3` driver. Supported platforms use its bundled
+native binaries; other platforms may require a compatible native build.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -30,16 +31,16 @@ It speaks MCP on stdin/stdout, so a direct launch waits for an MCP client.
 
 ## Configuration
 
-| Variable | Meaning | Default |
-| --- | --- | --- |
-| `NAVIDROME_URL` | Required server base URL, including any reverse-proxy prefix | None |
-| `NAVIDROME_USERNAME` | Required Navidrome username | None |
-| `NAVIDROME_PASSWORD` | Required password usable for Subsonic token/salt authentication | None |
-| `NAVIDROME_DB_PATH` | SQLite file; use an absolute path in MCP configuration | `.data/playlists.sqlite` under the working directory |
-| `NAVIDROME_REQUIRE_APPROVAL` | Require an agent assertion of human approval (`true` or `false`) | `false` |
-| `NAVIDROME_TIMEOUT_MS` | Per-request timeout, 100–60000 milliseconds | `15000` |
-| `NAVIDROME_SEARCH_PAGE_SIZE` | Search page size, 1–500 | `100` |
-| `NAVIDROME_SEARCH_MAX_PAGES` | Maximum pages per search, 1–100 | `20` |
+| Variable                     | Meaning                                                          | Default                                              |
+| ---------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------- |
+| `NAVIDROME_URL`              | Required server base URL, including any reverse-proxy prefix     | None                                                 |
+| `NAVIDROME_USERNAME`         | Required Navidrome username                                      | None                                                 |
+| `NAVIDROME_PASSWORD`         | Required password usable for Subsonic token/salt authentication  | None                                                 |
+| `NAVIDROME_DB_PATH`          | SQLite file; use an absolute path in MCP configuration           | `.data/playlists.sqlite` under the working directory |
+| `NAVIDROME_REQUIRE_APPROVAL` | Require an agent assertion of human approval (`true` or `false`) | `false`                                              |
+| `NAVIDROME_TIMEOUT_MS`       | Per-request timeout, 100–60000 milliseconds                      | `15000`                                              |
+| `NAVIDROME_SEARCH_PAGE_SIZE` | Search page size, 1–500                                          | `100`                                                |
+| `NAVIDROME_SEARCH_MAX_PAGES` | Maximum pages per search, 1–100                                  | `20`                                                 |
 
 Use an HTTP(S) base URL without embedded credentials, query, or fragment. Do not
 append `/rest`. Authentication derives a fresh Subsonic token and salt from the
@@ -86,19 +87,19 @@ localhost directly. This version provides no network MCP transport.
 
 ## Tools
 
-| Tool | Input and behavior |
-| --- | --- |
-| `check_connection` | `{}`; checks connectivity and authentication |
-| `search_tracks` | `{query}`; returns tracks and a `complete` flag |
-| `resolve_tracks` | `{songs: [{title, artist, album?, version?, duration?}]}`; one resolution per input occurrence |
-| `list_playlists` | `{}`; lists IDs and metadata; duplicate names are permitted |
-| `get_playlist` | `{playlistId}`; returns ordered tracks and visibility |
-| `save_playlist_draft` | `{name, visibility?, entries, draftId?, expectedRevision?}`; creates or replaces a complete draft revision |
-| `get_playlist_draft` | `{draftId, revision?}`; reads the current or a historical revision |
-| `copy_playlist_draft` | `{draftId, revision, name?}`; creates a separate editable draft |
-| `preview_playlist` | `{draftId, revision}`; presents and records the exact current revision |
-| `publish_playlist` | `{draftId, revision, operationKey, approval?}`; starts once or returns the existing operation |
-| `get_operation` | `{operationId}`; reads progress, outcome, and recovery version |
+| Tool                  | Input and behavior                                                                                                |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `check_connection`    | `{}`; checks connectivity and authentication                                                                      |
+| `search_tracks`       | `{query}`; returns tracks and a `complete` flag                                                                   |
+| `resolve_tracks`      | `{songs: [{title, artist, album?, version?, duration?}]}`; one resolution per input occurrence                    |
+| `list_playlists`      | `{}`; lists IDs and metadata; duplicate names are permitted                                                       |
+| `get_playlist`        | `{playlistId}`; returns ordered tracks and visibility                                                             |
+| `save_playlist_draft` | `{name, visibility?, entries, draftId?, expectedRevision?}`; creates or replaces a complete draft revision        |
+| `get_playlist_draft`  | `{draftId, revision?}`; reads the current or a historical revision                                                |
+| `copy_playlist_draft` | `{draftId, revision, name?}`; creates a separate editable draft                                                   |
+| `preview_playlist`    | `{draftId, revision}`; presents and records the exact current revision                                            |
+| `publish_playlist`    | `{draftId, revision, operationKey, approval?}`; starts once or returns the existing operation                     |
+| `get_operation`       | `{operationId}`; reads progress, outcome, and recovery version                                                    |
 | `reconcile_operation` | `{operationId, action, recoveryKey, expectedRecoveryVersion, playlistId?, reason?}`; performs deliberate recovery |
 
 A draft entry is `{request: {title, artist, album?, version?, duration?}, trackId?}`
@@ -114,7 +115,7 @@ Every edit creates a new revision and invalidates the previous preview.
 Expected problems return structured results such as:
 
 ```json
-{"status":"stale_revision","message":"Reload the current draft before editing."}
+{ "status": "stale_revision", "message": "Reload the current draft before editing." }
 ```
 
 Successful tool execution returns `{"status":"ok","data":...}`. For publishing,
@@ -135,8 +136,11 @@ tool result alone does not mean a playlist was successfully published.
      "name": "Evening",
      "visibility": "public",
      "entries": [
-       {"request":{"title":"Teardrop","artist":"Massive Attack"},"trackId":"actual-library-id"},
-       {"request":{"title":"Unavailable song","artist":"Artist"},"omit":true}
+       {
+         "request": { "title": "Teardrop", "artist": "Massive Attack" },
+         "trackId": "actual-library-id"
+       },
+       { "request": { "title": "Unavailable song", "artist": "Artist" }, "omit": true }
      ]
    }
    ```
@@ -215,9 +219,10 @@ publication key alone never bypasses an unknown outcome.
 ## Development
 
 ```sh
-pnpm typecheck
-pnpm test
-pnpm build
+pnpm check             # formatting, lint, typecheck, build, all tests
+pnpm test:integration  # fast public-service tests
+pnpm test:watch        # integration tests while editing
+pnpm test:coverage     # V8 coverage and HTML report
 ```
 
 Tests exercise the public service against real SQLite and a local fake Navidrome
@@ -228,3 +233,34 @@ permit ephemeral loopback sockets and local subprocesses.
 
 The agreed spec lives in `.scratch/playlist-service/spec.md`; domain vocabulary
 is in `GLOSSARY.md`, with architectural decisions in `docs/adr/`.
+
+Source modules live in `src/playlists/` (matching, drafts, publication and tool
+contracts), `src/database/` (Drizzle queries and migrations), `src/navidrome/`
+(upstream adapter), and `src/mcp/` (tool registration). `src/app.ts` constructs
+and injects dependencies; `src/cli.ts` owns stdio and process lifetime.
+
+Vitest projects separate `tests/integration/` from `tests/e2e/`. Both use shared
+fixtures in `tests/support/`. End-to-end tests run the compiled CLI; `pnpm test`
+and `pnpm test:coverage` build it first. Coverage instruments the source imported
+by integration tests; the separate CLI subprocesses are behaviorally tested but
+are not instrumented in that report. The crash test waits for the durable lease
+rather than shortening production recovery semantics.
+
+### Database upgrades
+
+Stop every process using the database and take a SQLite backup before upgrading.
+On startup the application applies committed SQL files from `drizzle/` in a
+single immediate transaction and records their versions in `schema_migrations`.
+The initial migration accepts the original unversioned schema and preserves
+existing revisions, previews, locks, operation keys, worker leases, and recovery
+history. The second migration exposes operational state in typed columns while
+retaining validated JSON snapshots. Startup fails if a migration fails or the
+schema is newer than the application. A failed transaction leaves schema and
+version records unchanged.
+
+Deploy `drizzle/` alongside `dist/` and `node_modules/`; SQL paths resolve relative
+to the application, independent of the launch directory. Add numbered SQL files
+and update the migration list in `src/database/migrate.ts` for future changes;
+update the typed schema and add public-service upgrade coverage in the same
+change. Review SQL before release. An older application cannot safely open the
+upgraded schema: rollback requires restoring the pre-upgrade backup.

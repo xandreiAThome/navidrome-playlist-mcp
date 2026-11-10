@@ -1,7 +1,11 @@
 import type { RequestedSong, Resolution, Track } from './domain.ts';
 
 export function normalize(value: string): string {
-  return value.normalize('NFKC').toLocaleLowerCase('en').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  return value
+    .normalize('NFKC')
+    .toLocaleLowerCase('en')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
 }
 
 function baseTitle(value: string): string {
@@ -18,12 +22,17 @@ function baseTitle(value: string): string {
 
 export function match(request: RequestedSong, tracks: Track[], complete: boolean): Resolution {
   const explicitTitleVersion = baseTitle(request.title) !== normalize(request.title);
-  const candidates = tracks.filter(track => normalize(track.artist) === normalize(request.artist)
-    && baseTitle(track.title) === baseTitle(request.title)
-    && (!explicitTitleVersion || normalize(track.title) === normalize(request.title))
-    && (!request.album || normalize(track.album ?? '') === normalize(request.album))
-    && (!request.version || ` ${normalize(track.title)} `.includes(` ${normalize(request.version)} `))
-    && (request.duration === undefined || (track.duration !== undefined && Math.abs(track.duration - request.duration) <= 2)));
+  const candidates = tracks.filter(
+    (track) =>
+      normalize(track.artist) === normalize(request.artist) &&
+      baseTitle(track.title) === baseTitle(request.title) &&
+      (!explicitTitleVersion || normalize(track.title) === normalize(request.title)) &&
+      (!request.album || normalize(track.album ?? '') === normalize(request.album)) &&
+      (!request.version ||
+        ` ${normalize(track.title)} `.includes(` ${normalize(request.version)} `)) &&
+      (request.duration === undefined ||
+        (track.duration !== undefined && Math.abs(track.duration - request.duration) <= 2)),
+  );
   if (!complete) return { status: 'incomplete', candidates };
   const single = candidates.length === 1 ? candidates[0] : undefined;
   if (single && (normalize(single.title) === normalize(request.title) || request.version)) {

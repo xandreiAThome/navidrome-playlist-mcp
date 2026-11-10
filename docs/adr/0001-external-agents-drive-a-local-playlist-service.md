@@ -6,4 +6,16 @@ This boundary supports different local agents without embedding an AI runtime or
 
 Publishing is allowed without human confirmation by default. An optional confirmation policy trusts the agent's assertion that the user approved the exact preview revision; it is not an independently authenticated human approval channel.
 
-The initial implementation uses TypeScript, Node.js, pnpm, the official MCP server SDK, and local SQLite through Node's built-in API. The built-in SQLite API's release-candidate status is accepted, and storage is isolated behind a small module.
+The implementation uses TypeScript, Node.js LTS, pnpm, the official MCP server SDK,
+and local SQLite behind a small storage module. The initial built-in SQLite driver
+was replaced in the authorized maintainability refactor with Drizzle ORM and
+better-sqlite3. Typed queries improve schema maintenance at the cost of a native
+dependency and platform binary compatibility. TypeScript 6 is retained because the
+selected TypeScript ESLint release does not yet support TypeScript 7.
+
+Reviewed, versioned SQL migrations preserve existing databases, with an immediate
+transaction serializing startup upgrades. Publication claims and recovery retain
+immediate transactions and conditional owner/lease updates; ORM convenience must
+preserve those guarantees. Operational state uses explicit columns, while validated
+JSON retains immutable revision snapshots and operation recovery history. The
+publication policy in ADR 0002 remains authoritative.

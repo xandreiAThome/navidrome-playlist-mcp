@@ -10,7 +10,8 @@ implementation and review specification; see `GLOSSARY.md` and `docs/adr/`.
 - Serve one user and one Navidrome account.
 - External agents interpret conversations and send structured requested songs.
 - Implement a local MCP stdio command in TypeScript using Node, pnpm, the official
-  MCP server SDK, and Node's built-in SQLite API behind a small storage module.
+  MCP server SDK, and Drizzle ORM with better-sqlite3 behind a small storage module
+  (superseded by the authorized maintainability refactor; see ADR 0001).
 - Do not add HTTP/network transports, browser UI, an embedded agent, Docker,
   multi-user access, mood discovery, or editing existing Navidrome playlists.
 - Read server URL, credentials, database location, and optional confirmation policy
