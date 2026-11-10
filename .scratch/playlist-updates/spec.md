@@ -1,10 +1,14 @@
 # Append explicit songs and similar-song recommendations to existing playlists
 
-Status: ready-for-agent
+Status: done
 
-The design interview is complete, and the user confirmed the testing seams.
-This spec authorizes planning; implementation and live playlist writes have not
-been requested.
+Implementation and dedicated live validation were subsequently authorized and
+completed. Both review axes passed, and the required check passed all 64 tests.
+The user marked this work done on 2026-11-10.
+
+See [implementation status](implementation-status.md) and
+[live validation](live-validation.md). Live cross-account ownership-denial
+validation remains outstanding pending a second test account.
 
 ## Problem Statement
 

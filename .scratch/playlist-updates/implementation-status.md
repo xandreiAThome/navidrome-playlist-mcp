@@ -1,5 +1,10 @@
 # Playlist update implementation status
 
+Status: done
+
+Marked done by the user on 2026-11-10. Both review axes passed; `pnpm check`
+passed all 64 tests. The remaining live ownership check is recorded below.
+
 Implementation and dedicated live validation were subsequently authorized in the
 conversation, superseding the original spec's planning-only authorization.
 
