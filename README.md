@@ -95,8 +95,9 @@ The server value is the `server_id` of your Navidrome connection in AudioMuse's
 `GET /api/servers` response. Discovery also needs
 `AUDIOMUSE_CALIBRATION_PATH`, a quality-calibration file for your deployment.
 
-See [AudioMuse setup](docs/discovery.md) for the server lookup command,
-calibration format, and Docker mount instructions.
+See [AudioMuse setup](docs/discovery.md) for connection details and the
+[calibration guide](docs/calibration.md) for commands to collect, rate, and verify
+recommendations.
 
 ## A few things to know
 

@@ -1,5 +1,7 @@
 # AudioMuse discovery
 
+For a first-time setup, follow the [step-by-step calibration guide](calibration.md).
+
 AudioMuse-AI is separately managed; this service does not install models or trigger
 analysis. The adapter is validated against **v3.7.1**. Explicit song-list workflows
 remain available when AudioMuse is absent or unavailable.
