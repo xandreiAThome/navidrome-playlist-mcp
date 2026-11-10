@@ -14,3 +14,13 @@ Use the five default triage roles. Before triaging issues, read
 
 This repo uses a single-context layout. Before exploring the
 codebase, read `docs/agents/domain.md`.
+
+### Architecture
+
+Before navigating modules or changing system boundaries, read
+`docs/architecture.md` for the current architecture and project map.
+
+### Coding standards
+
+Before implementing or reviewing code, read `docs/coding-standards.md`
+for coding standards, implementation conventions, and required checks.

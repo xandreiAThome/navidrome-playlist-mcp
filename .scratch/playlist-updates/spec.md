@@ -154,6 +154,7 @@ clients can still edit between the final read and write.
 
 ## Further Notes
 
+- Follow the shared [architecture and project map](../../docs/architecture.md) and [coding standards and implementation conventions](../../docs/coding-standards.md). The architecture guide distinguishes implemented behavior from this planned extension.
 - The authoritative design decision is [ADR 0004](../../docs/adr/0004-append-to-existing-playlists.md). Use the root [glossary](../../GLOSSARY.md) for domain vocabulary. Creation-specific glossary terms and recovery meanings continue to apply to publishing; update results must clearly identify their own operation kind.
 - Preserve the architecture and creation guarantees in [ADR 0001](../../docs/adr/0001-external-agents-drive-a-local-playlist-service.md) and [ADR 0002](../../docs/adr/0002-journal-publication-and-stop-on-unknown-creation.md), with the append-only scope extension recorded in ADR 0004.
 - Discovery policies come from [ADR 0003](../../docs/adr/0003-optional-audiomuse-discovery.md) and the [AudioMuse spec](../audiomuse-integration/spec.md). Historical implementation-authorization and validation statements there describe earlier planning; consult the existing [calibration](../audiomuse-integration/calibration.md) and [live validation](../audiomuse-integration/live-validation.md) records when assessing current discovery behavior.

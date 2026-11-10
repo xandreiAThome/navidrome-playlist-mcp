@@ -112,6 +112,10 @@ Rollback requires restoring the pre-upgrade backup.
 
 ## Development
 
+See the [architecture and project map](docs/architecture.md) for module ownership
+and the [coding standards](docs/coding-standards.md) for implementation conventions
+and testing expectations.
+
 ```sh
 pnpm check             # formatting, lint, typecheck, build, all tests
 pnpm test:watch        # integration tests while editing
