@@ -15,6 +15,14 @@ _Avoid_: Requested song
 **Playlist**:
 A named, ordered collection of library tracks in Navidrome.
 
+**Playlist update**:
+A proposed addition of library tracks to an existing playlist, preserving its existing tracks, order, name, and visibility. Explicit requested-song occurrences remain separate additions even when the same library track is already present.
+_Avoid_: Publishing
+
+**Update draft**:
+A revisable proposal to append tracks to one existing playlist, with its original playlist state, proposed additions, and recommendation references kept distinct. A successfully applied update draft represents that same update when requested again; an intentional further append requires a new update draft.
+_Avoid_: Playlist draft, playlist
+
 **Candidate match**:
 A library track that may satisfy a requested song, but has not yet been selected for it.
 _Avoid_: Selected track
@@ -27,7 +35,7 @@ _Avoid_: Candidate match
 Adding recommended tracks to a playlist draft based on a supplied song list.
 
 **Reference track**:
-A distinct selected library track whose sound guides recommendations. Supplied songs establish the initial reference tracks; retaining a recommendation does not itself make it a reference track.
+A distinct library track chosen to guide recommendations by its sound; it need not be included in the destination playlist. Supplied songs establish the initial reference tracks; retaining a recommendation does not itself make it a reference track.
 
 **Retained recommendation**:
 A recommended track the user explicitly chose to keep in a playlist draft. It is protected from replacement when recommendations are regenerated.
@@ -51,11 +59,11 @@ Creating a new playlist in Navidrome from the selected library tracks in their r
 _Avoid_: Updating a playlist
 
 **Draft revision**:
-A specific version of the proposed playlist's name, visibility, requested-song order, selections, and omissions. Approval and publishing refer to that version rather than to future changes.
+A specific version of a playlist draft or update draft, including its proposed contents, selections, omissions, reference choices, and applicable target or metadata. Approval, publishing, and applying an update refer to that version rather than to future changes.
 _Avoid_: Preview revision
 
 **Preview**:
-A read-only presentation of an exact draft revision for review before publishing.
+A read-only presentation of an exact draft revision for review before publishing or applying a playlist update.
 
 **Approval assertion**:
 The external agent's statement that the user approved a specific draft revision when human confirmation is required.
