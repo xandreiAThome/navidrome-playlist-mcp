@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 import { Problem } from './playlists/domain.ts';
 import type { Config } from './playlists/domain.ts';
+import { isSupportedRelease, releaseMinor, supportedReleaseMessage } from './discovery/release.ts';
 
 const optionalSetting = <T extends z.ZodType>(schema: T) =>
   z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
@@ -68,7 +69,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
             audiomuseUrl: z.url(),
             navidromeUrl: z.url(),
             server: z.string().min(1),
-            version: z.literal('v3.7.1'),
+            version: z.string().refine((version) => releaseMinor(version) !== undefined),
             indexModel: z.string().min(1),
             report: z.string().min(1),
             maxDistance: z.number().finite().nonnegative(),
@@ -81,8 +82,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
           calibration.server !== audiomuse.server
         )
           throw new Error('Calibration belongs to another deployment');
+        if (!isSupportedRelease(calibration.version))
+          throw new Problem(
+            'configuration_error',
+            `The AudioMuse calibration was made on ${calibration.version}. ${supportedReleaseMessage}; calibration from another minor release is stale and must be redone.`,
+          );
         audiomuse.calibration = calibration;
-      } catch {
+      } catch (error) {
+        if (error instanceof Problem) throw error;
         throw new Problem(
           'configuration_error',
           'The AudioMuse calibration file must be valid and belong to this deployment, Navidrome URL, and selected server.',

@@ -13,6 +13,7 @@ import type {
 } from '../playlists/domain.ts';
 import type { Navidrome } from '../navidrome/client.ts';
 import type { AudioMuse } from './audiomuse.ts';
+import { releaseMinor } from './release.ts';
 
 const rowSchema = z.object({
   item_id: z.string().min(1).max(500),
@@ -53,18 +54,12 @@ export class Discovery {
         'Discovery requires a calibration report and quality thresholds for this deployment and index/model.',
       );
     const signal = AbortSignal.timeout(this.config.budgetMs);
-    const version = z
-      .object({ app_version: z.literal(calibration.version) })
-      .safeParse(await this.audiomuse.request('/api/version', signal));
-    if (!version.success)
+    const version = await this.audiomuse.supportedVersion(signal);
+    if (releaseMinor(calibration.version) !== releaseMinor(version))
       throw new Problem(
         'calibration_required',
-        'AudioMuse version differs from the calibrated version; validate the adapter and recalibrate.',
-      );
-    if (calibration.version !== 'v3.7.1')
-      throw new Problem(
-        'calibration_required',
-        'This adapter has been validated against AudioMuse v3.7.1; validate compatibility before using another version.',
+        `The calibration was made on AudioMuse ${calibration.version} but the deployment runs ${version}; calibration is stale after a minor-release change and must be redone.`,
+        { calibratedVersion: calibration.version, deploymentVersion: version },
       );
     await this.audiomuse.verifyServer(signal);
     return { signal, calibration };

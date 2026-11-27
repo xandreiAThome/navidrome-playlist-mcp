@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { Problem } from '../playlists/domain.ts';
 import type { Config } from '../playlists/domain.ts';
+import {
+  isSupportedRelease,
+  releaseMinor,
+  supportedAudioMuse,
+  supportedReleaseMessage,
+} from './release.ts';
 
 export class AudioMuse {
   constructor(
@@ -52,19 +58,36 @@ export class AudioMuse {
   async checkConnection() {
     const config = this.configured();
     const signal = AbortSignal.timeout(config.budgetMs);
-    const parsed = z
-      .object({ app_version: z.string().min(1).max(100) })
-      .safeParse(await this.request('/api/version', signal));
-    if (!parsed.success)
-      throw new Problem('audiomuse_error', 'AudioMuse returned an invalid version response.');
+    const version = await this.supportedVersion(signal);
     await this.verifyServer(signal);
     return {
       connected: true,
-      version: parsed.data.app_version,
+      version,
       calibrated: Boolean(
-        config.calibration && config.calibration.version === parsed.data.app_version,
+        config.calibration && releaseMinor(config.calibration.version) === releaseMinor(version),
       ),
     };
+  }
+
+  /** The deployment's release, rejected unless it is a supported minor release. */
+  async supportedVersion(signal: AbortSignal) {
+    const parsed = z
+      .object({ app_version: z.string().refine((value) => releaseMinor(value) !== undefined) })
+      .safeParse(await this.request('/api/version', signal));
+    if (!parsed.success)
+      throw new Problem('audiomuse_error', 'AudioMuse returned an invalid version response.');
+    const version = parsed.data.app_version;
+    if (!isSupportedRelease(version))
+      throw new Problem(
+        'audiomuse_error',
+        `${supportedReleaseMessage}; the deployment runs ${version}. Validate compatibility before using another minor release.`,
+        {
+          version,
+          supportedMinor: supportedAudioMuse.minor,
+          validatedBaseline: supportedAudioMuse.validatedBaseline,
+        },
+      );
+    return version;
   }
 
   async verifyServer(signal: AbortSignal) {
