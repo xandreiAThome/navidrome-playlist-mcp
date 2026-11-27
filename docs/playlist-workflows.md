@@ -62,7 +62,9 @@ remains unknown and prevents appending until compatibility is established.
 ## Storage and upgrades
 
 Docker stores SQLite in the `playlist-data` volume at `/data/playlists.sqlite`.
-Local runs default to `.data/playlists.sqlite`. Keep the same server URL and
+Local runs default to `navidrome-playlist-mcp/playlists.sqlite` in the per-user
+data directory listed in the [README](../README.md#a-few-things-to-know);
+`NAVIDROME_DB_PATH` overrides it. Keep the same server URL and
 username for an existing database; host databases are not automatically imported
 into Docker.
 
