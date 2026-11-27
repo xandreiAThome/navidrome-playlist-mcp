@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { navidromeFixture } from '../support/navidrome.ts';
-import { confirm, password, scriptedPrompts, text } from '../support/prompts.ts';
-import type { Answer } from '../support/prompts.ts';
+import { fakeClients } from '../support/clients.ts';
+import { confirm, multiselect, password, scriptedPrompts, text } from '../support/prompts.ts';
+import type { Answer, Event } from '../support/prompts.ts';
+import type { Choice } from '../../src/setup/prompts.ts';
 import { runSetup } from '../../src/setup/run.ts';
 import { SetupCancelled } from '../../src/setup/prompts.ts';
 
@@ -21,9 +23,17 @@ const USERNAME_PROMPT = /username/i;
 const PASSWORD_PROMPT = /password/i;
 const DECLINE_AUDIOMUSE = confirm(/AudioMuse/, false);
 
-async function setup(script: Answer[]) {
-  const session = scriptedPrompts(script);
-  await runSetup({ prompts: session.prompts, version: '9.8.7', timeoutMs: 1000 });
+const CLIENTS_PROMPT = /install/i;
+const MANUAL = 'manual';
+
+/** Runs setup; unless client answers are given, the user picks the manual copy. */
+async function setup(
+  script: Answer[],
+  clientScript: Answer[] = [multiselect(CLIENTS_PROMPT, [MANUAL])],
+  clients = fakeClients().clients,
+) {
+  const session = scriptedPrompts([...script, ...clientScript]);
+  await runSetup({ prompts: session.prompts, clients, version: '9.8.7', timeoutMs: 1000 });
   assert.deepEqual(session.remaining, [], 'setup asked fewer questions than scripted');
   return session;
 }
@@ -143,8 +153,162 @@ test('setup cancelled before the account verifies never prints a configuration',
     password(PASSWORD_PROMPT, 'wrong-password'),
   ]);
   await assert.rejects(
-    runSetup({ prompts: session.prompts, version: '9.8.7', timeoutMs: 1000 }),
+    runSetup({
+      prompts: session.prompts,
+      clients: fakeClients().clients,
+      version: '9.8.7',
+      timeoutMs: 1000,
+    }),
     SetupCancelled,
   );
   assert.deepEqual(session.messages('note'), []);
+});
+
+const ACCOUNT = () => [
+  text(URL_PROMPT, remote.config.url),
+  text(USERNAME_PROMPT, 'tester'),
+  password(PASSWORD_PROMPT, 'secret-password'),
+  DECLINE_AUDIOMUSE,
+];
+const ENTRY = () => ({
+  command: 'npx',
+  args: ['-y', '@xandreiathome/navidrome-playlist-mcp@9.8.7'],
+  env: {
+    NAVIDROME_URL: remote.config.url,
+    NAVIDROME_USERNAME: 'tester',
+    NAVIDROME_PASSWORD: 'secret-password',
+  },
+});
+
+test('detected clients are listed first and preselected, with the manual copy last', async () => {
+  const fake = fakeClients({ detected: ['cursor', 'claude-code'] });
+  const session = await setup(
+    ACCOUNT(),
+    [multiselect(CLIENTS_PROMPT, ['claude-code', 'cursor'])],
+    fake.clients,
+  );
+
+  const asked = session.events.find(
+    (e): e is Event & { kind: 'multiselect'; choices?: Choice<unknown>[]; initial?: unknown } =>
+      e.kind === 'multiselect',
+  );
+  assert.deepEqual(
+    asked?.choices?.map((c) => c.value),
+    [
+      'claude-code',
+      'cursor',
+      'claude-desktop',
+      'vscode',
+      'codex',
+      'gemini-cli',
+      'github-copilot-cli',
+      'windsurf',
+      MANUAL,
+    ],
+  );
+  assert.deepEqual(asked?.initial, ['claude-code', 'cursor']);
+  assert.deepEqual(fake.written, [
+    { id: 'claude-code', entry: ENTRY() },
+    { id: 'cursor', entry: ENTRY() },
+  ]);
+  assert.deepEqual(session.messages('success').slice(1), [
+    'Installed into Claude Code (/home/tester/claude-code.json).',
+    'Installed into Cursor (/home/tester/cursor.json).',
+  ]);
+  assert.deepEqual(session.messages('note'), []);
+});
+
+test('a client that cannot be written falls back to the config to copy, naming where it goes', async () => {
+  const store = 'C:/Users/tester/AppData/Local/Packages/Claude_x/claude_desktop_config.json';
+  const fake = fakeClients({
+    outcomes: {
+      'claude-desktop': {
+        status: 'manual',
+        path: store,
+        reason: 'This is a Microsoft Store install of Claude Desktop.',
+      },
+      cursor: { status: 'failed', path: '/home/tester/cursor.json' },
+    },
+  });
+  const session = await setup(
+    ACCOUNT(),
+    [multiselect(CLIENTS_PROMPT, ['claude-desktop', 'cursor', 'codex'])],
+    fake.clients,
+  );
+
+  assert.deepEqual(fake.written, [{ id: 'codex', entry: ENTRY() }]);
+  assert.deepEqual(session.messages('warn'), [
+    `This is a Microsoft Store install of Claude Desktop. Copy the config below into ${store}.`,
+  ]);
+  assert.deepEqual(session.messages('error'), [
+    'Could not write the Cursor configuration (/home/tester/cursor.json). Copy the config below instead.',
+  ]);
+  assert.deepEqual(manualConfig(session).mcpServers.navidrome, ENTRY());
+});
+
+const OLD_ENTRY = () => ({
+  command: 'npx',
+  args: ['-y', '@xandreiathome/navidrome-playlist-mcp@0.1.0'],
+  env: {
+    NAVIDROME_URL: remote.config.url,
+    NAVIDROME_USERNAME: 'tester',
+    NAVIDROME_PASSWORD: 'old-password',
+    AUDIOMUSE_API_TOKEN: 'old-token',
+  },
+});
+
+test('rerunning shows what changes in an existing entry, secrets masked, and overwrites on confirmation', async () => {
+  const fake = fakeClients({ detected: ['claude-code'], entries: { 'claude-code': OLD_ENTRY() } });
+  const session = await setup(
+    ACCOUNT(),
+    [multiselect(CLIENTS_PROMPT, ['claude-code']), confirm(/Overwrite/, true)],
+    fake.clients,
+  );
+
+  assert.deepEqual(
+    session.events.filter((e) => e.kind === 'note'),
+    [
+      {
+        kind: 'note',
+        title: 'Changes to the navidrome server in Claude Code',
+        message: [
+          '  command: npx',
+          '- args: -y @xandreiathome/navidrome-playlist-mcp@0.1.0',
+          '+ args: -y @xandreiathome/navidrome-playlist-mcp@9.8.7',
+          `  NAVIDROME_URL: ${remote.config.url}`,
+          '  NAVIDROME_USERNAME: tester',
+          '- NAVIDROME_PASSWORD: ********',
+          '+ NAVIDROME_PASSWORD: ******** (changed)',
+          '- AUDIOMUSE_API_TOKEN: ********',
+        ].join('\n'),
+      },
+    ],
+  );
+  assert.deepEqual(session.events.filter((e) => e.kind === 'confirm').at(-1), {
+    kind: 'confirm',
+    message: 'Overwrite the navidrome server in Claude Code?',
+    initial: false,
+  });
+  assert.deepEqual(fake.written, [{ id: 'claude-code', entry: ENTRY() }]);
+  const shown = JSON.stringify(session.events);
+  for (const secret of ['secret-password', 'old-password', 'old-token'])
+    assert.equal(shown.includes(secret), false, secret);
+});
+
+test('declining the overwrite leaves that client unchanged and still installs the others', async () => {
+  const fake = fakeClients({ entries: { 'claude-code': OLD_ENTRY() } });
+  const session = await setup(
+    ACCOUNT(),
+    [multiselect(CLIENTS_PROMPT, ['claude-code', 'cursor']), confirm(/Overwrite/, false)],
+    fake.clients,
+  );
+  assert.deepEqual(fake.written, [{ id: 'cursor', entry: ENTRY() }]);
+  assert.deepEqual(session.messages('info'), ['Left Claude Code unchanged.']);
+});
+
+test('an entry that already matches is not rewritten or confirmed', async () => {
+  const fake = fakeClients({ entries: { cursor: ENTRY() } });
+  const session = await setup(ACCOUNT(), [multiselect(CLIENTS_PROMPT, ['cursor'])], fake.clients);
+  assert.deepEqual(fake.written, []);
+  assert.deepEqual(session.messages('info'), ['Cursor is already up to date.']);
 });

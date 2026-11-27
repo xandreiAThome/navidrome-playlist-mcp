@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, test } from 'vitest';
 import assert from 'node:assert/strict';
 import { AUDIOMUSE_TOKEN, audioMuseFixture } from '../support/audiomuse.ts';
+import { fakeClients } from '../support/clients.ts';
 import { navidromeFixture } from '../support/navidrome.ts';
-import { confirm, password, scriptedPrompts, text } from '../support/prompts.ts';
+import { confirm, multiselect, password, scriptedPrompts, text } from '../support/prompts.ts';
 import type { Answer } from '../support/prompts.ts';
 import { runSetup } from '../../src/setup/run.ts';
 
@@ -30,8 +31,17 @@ const navidromeAnswers = (): Answer[] => [
 ];
 
 async function setup(script: Answer[]) {
-  const session = scriptedPrompts([...navidromeAnswers(), ...script]);
-  const entry = await runSetup({ prompts: session.prompts, version: '9.8.7', timeoutMs: 1000 });
+  const session = scriptedPrompts([
+    ...navidromeAnswers(),
+    ...script,
+    multiselect(/install/i, ['manual']),
+  ]);
+  const entry = await runSetup({
+    prompts: session.prompts,
+    clients: fakeClients().clients,
+    version: '9.8.7',
+    timeoutMs: 1000,
+  });
   assert.deepEqual(session.remaining, [], 'setup asked fewer questions than scripted');
   return { session, env: entry.env };
 }
