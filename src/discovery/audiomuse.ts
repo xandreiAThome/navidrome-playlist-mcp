@@ -23,6 +23,12 @@ export class AudioMuse {
     return this.config;
   }
 
+  /**
+   * Sends one request with the configured server. Setup leaves the server empty
+   * to read the version and server listings before one is chosen. Failures are
+   * `audiomuse_error` problems whose details say whether AudioMuse was unreachable
+   * or rejected the request (with the HTTP status).
+   */
   async request(
     path: string,
     signal: AbortSignal,
@@ -31,7 +37,13 @@ export class AudioMuse {
   ): Promise<unknown> {
     const config = this.configured();
     const url = new URL(`${config.url.replace(/\/$/, '')}${path}`);
-    url.search = new URLSearchParams({ ...params, server: config.server }).toString();
+    url.search = new URLSearchParams({
+      ...params,
+      ...(config.server ? { server: config.server } : {}),
+    }).toString();
+    let failure: { reason: 'unreachable' } | { reason: 'rejected'; httpStatus: number } = {
+      reason: 'unreachable',
+    };
     try {
       const response = await fetch(url, {
         method: body ? 'POST' : 'GET',
@@ -40,7 +52,10 @@ export class AudioMuse {
         signal,
         redirect: 'error',
       });
-      if (!response.ok) throw new Error('Upstream failure');
+      if (!response.ok) {
+        failure = { reason: 'rejected', httpStatus: response.status };
+        throw new Error('Upstream failure');
+      }
       return await response.json();
     } catch {
       if (signal.aborted)
@@ -51,6 +66,7 @@ export class AudioMuse {
       throw new Problem(
         'audiomuse_error',
         'AudioMuse did not return a usable successful response; check authentication, server selection, and index availability.',
+        failure,
       );
     }
   }
@@ -89,8 +105,11 @@ export class AudioMuse {
     return version;
   }
 
-  async verifyServer(signal: AbortSignal) {
-    const config = this.configured();
+  /**
+   * The AudioMuse media servers that expose this service's Navidrome base URL,
+   * or undefined when the listing is malformed.
+   */
+  async navidromeServers(signal: AbortSignal) {
     const parsed = z
       .object({
         servers: z.array(
@@ -103,15 +122,21 @@ export class AudioMuse {
         ),
       })
       .safeParse(await this.request('/api/servers', signal));
-    const selected = parsed.success
-      ? parsed.data.servers.find(
-          (server) => server.server_id === config.server || server.name === config.server,
-        )
-      : undefined;
+    if (!parsed.success) return undefined;
+    const base = this.navidromeUrl.replace(/\/$/, '');
+    return parsed.data.servers.filter(
+      (server) =>
+        server.server_type === 'navidrome' && server.creds?.url.replace(/\/$/, '') === base,
+    );
+  }
+
+  async verifyServer(signal: AbortSignal) {
+    const config = this.configured();
+    const matching = await this.navidromeServers(signal);
     if (
-      !selected ||
-      selected.server_type !== 'navidrome' ||
-      selected.creds?.url.replace(/\/$/, '') !== this.navidromeUrl.replace(/\/$/, '')
+      !matching?.some(
+        (server) => server.server_id === config.server || server.name === config.server,
+      )
     )
       throw new Problem(
         'configuration_error',

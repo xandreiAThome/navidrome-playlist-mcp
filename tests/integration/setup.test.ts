@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { navidromeFixture } from '../support/navidrome.ts';
-import { password, scriptedPrompts, text } from '../support/prompts.ts';
+import { confirm, password, scriptedPrompts, text } from '../support/prompts.ts';
 import type { Answer } from '../support/prompts.ts';
 import { runSetup } from '../../src/setup/run.ts';
 import { SetupCancelled } from '../../src/setup/prompts.ts';
@@ -19,6 +19,7 @@ afterEach(() => remote.close());
 const URL_PROMPT = /Navidrome URL/;
 const USERNAME_PROMPT = /username/i;
 const PASSWORD_PROMPT = /password/i;
+const DECLINE_AUDIOMUSE = confirm(/AudioMuse/, false);
 
 async function setup(script: Answer[]) {
   const session = scriptedPrompts(script);
@@ -40,6 +41,7 @@ test('a verified Navidrome account ends with a pinned manual config using the no
     text(URL_PROMPT, ` ${remote.config.url}/rest/ `),
     text(USERNAME_PROMPT, 'tester'),
     password(PASSWORD_PROMPT, 'secret-password'),
+    DECLINE_AUDIOMUSE,
   ]);
 
   assert.deepEqual(session.messages('success'), [
@@ -69,6 +71,7 @@ test('a URL that cannot be a Navidrome base URL is explained and asked again', a
     text(URL_PROMPT, remote.config.url),
     text(USERNAME_PROMPT, 'tester'),
     password(PASSWORD_PROMPT, 'secret-password'),
+    DECLINE_AUDIOMUSE,
   ]);
   assert.deepEqual(
     session.events.flatMap((e) => (e.kind === 'invalid' ? [e.error] : [])),
@@ -97,6 +100,7 @@ test('an unreachable server is explained and only the URL is asked again', async
     text(USERNAME_PROMPT, 'tester'),
     password(PASSWORD_PROMPT, 'secret-password'),
     text(URL_PROMPT, remote.config.url),
+    DECLINE_AUDIOMUSE,
   ]);
   assert.deepEqual(session.messages('error'), [
     `Could not reach a Navidrome server at ${unreachable}. Check the address and that the server is running.`,
@@ -116,6 +120,7 @@ test('rejected credentials are explained and asked again, keeping the URL', asyn
     password(PASSWORD_PROMPT, 'wrong-password'),
     text(USERNAME_PROMPT, 'tester'),
     password(PASSWORD_PROMPT, 'secret-password'),
+    DECLINE_AUDIOMUSE,
   ]);
   assert.deepEqual(session.messages('error'), ['Navidrome rejected the username or password.']);
   assert.deepEqual(session.events.filter((e) => e.kind === 'text').at(-1), {
