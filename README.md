@@ -68,8 +68,9 @@ pnpm build
 ```
 
 Copy [.env.example](.env.example) to `.env` if you haven't configured one already.
-Fill in your Navidrome credentials and set `NAVIDROME_DB_PATH` to an absolute path.
-The `AUDIOMUSE_CALIBRATION_PATH` you set must also be absolute: relative paths
+Fill in your Navidrome credentials. `NAVIDROME_DB_PATH` is optional; leave it
+unset to use the per-user default described under
+[A few things to know](#a-few-things-to-know). The `AUDIOMUSE_CALIBRATION_PATH` you set must also be absolute: relative paths
 resolve against the MCP client's working directory, which may not be this
 checkout.
 
@@ -150,9 +151,18 @@ retry rules.
 - Set `NAVIDROME_REQUIRE_APPROVAL=true` to require your agent to assert approval
   of the exact preview before writing.
 - Drafts and recovery history persist in SQLite. Local runs default to
-  `.data/playlists.sqlite`, resolved from the process working directory. Set
-  `NAVIDROME_DB_PATH` to an absolute path so every MCP client shares one database.
-  Keep backups when upgrading.
+  `navidrome-playlist-mcp/playlists.sqlite` in your per-user data directory, so
+  every MCP client shares one database regardless of its working directory:
+  - Linux: `$XDG_DATA_HOME`, or `~/.local/share` when unset.
+  - macOS: `~/Library/Application Support`.
+  - Windows: `%LOCALAPPDATA%`.
+
+  Set `NAVIDROME_DB_PATH` to use another location. Keep backups when upgrading.
+
+- Upgrading from a version that stored the database in `.data/playlists.sqlite`
+  under the working directory? Either set `NAVIDROME_DB_PATH` to that file's
+  absolute path or move the file to the new default location. The server does not
+  detect or import the old file.
 - If a write's outcome is uncertain, inspect and reconcile it before trying again.
   The server blocks uncertain appends to prevent accidental duplicates.
 - If the server exits immediately, it prints one generic startup error on purpose.

@@ -1,5 +1,6 @@
-import { resolve } from 'node:path';
+import { posix, win32 } from 'node:path';
 import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { z } from 'zod';
 import { Problem } from './playlists/domain.ts';
 import type { Config } from './playlists/domain.ts';
@@ -8,13 +9,35 @@ import { isSupportedRelease, releaseMinor, supportedReleaseMessage } from './dis
 const optionalSetting = <T extends z.ZodType>(schema: T) =>
   z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+export interface Host {
+  platform: NodeJS.Platform;
+  homedir: string;
+}
+
+function defaultDatabasePath(env: NodeJS.ProcessEnv, host: Host): string {
+  if (host.platform === 'win32')
+    return win32.join(
+      env.LOCALAPPDATA || win32.join(host.homedir, 'AppData', 'Local'),
+      'navidrome-playlist-mcp',
+      'playlists.sqlite',
+    );
+  const base =
+    host.platform === 'darwin'
+      ? posix.join(host.homedir, 'Library', 'Application Support')
+      : env.XDG_DATA_HOME || posix.join(host.homedir, '.local', 'share');
+  return posix.join(base, 'navidrome-playlist-mcp', 'playlists.sqlite');
+}
+
+export function loadConfig(
+  env: NodeJS.ProcessEnv = process.env,
+  host: Host = { platform: process.platform, homedir: homedir() },
+): Config {
   const parsed = z
     .object({
       NAVIDROME_URL: z.url(),
       NAVIDROME_USERNAME: z.string().min(1),
       NAVIDROME_PASSWORD: z.string().min(1),
-      NAVIDROME_DB_PATH: z.string().min(1).default(resolve('.data', 'playlists.sqlite')),
+      NAVIDROME_DB_PATH: z.string().min(1).default(defaultDatabasePath(env, host)),
       NAVIDROME_REQUIRE_APPROVAL: z.enum(['true', 'false']).default('false'),
       NAVIDROME_TIMEOUT_MS: z.coerce.number().int().min(100).max(60000).default(15000),
       NAVIDROME_SEARCH_PAGE_SIZE: z.coerce.number().int().min(1).max(500).default(100),
