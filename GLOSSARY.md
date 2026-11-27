@@ -94,3 +94,23 @@ Whether a playlist is public or private in Navidrome. New drafts default to publ
 **Recovery decision**:
 An explicit assertion that an unknown creation outcome should be reconciled by adopting a specified, verified playlist or by authorizing another creation attempt because the previous attempt did not create one.
 _Avoid_: Automatic retry
+
+## Calibration
+
+**Calibration**:
+The user's rated evidence and the resulting quality cutoff for one recommendation scale, valid only for the AudioMuse deployment and minor release it was measured on. Similarity and description recommendations are calibrated independently.
+_Avoid_: Calibration file, thresholds
+
+**Calibration probe**:
+A library track or listening description whose recommendation candidates the user rates during calibration.
+_Avoid_: Reference track, seed
+
+**Calibration rating**:
+The user's judgment that one candidate for a calibration probe is a good or poor fit.
+
+**Quality cutoff**:
+The limit a recommended track's score must meet to be offered: the similarity cutoff (a maximum distance) or the description cutoff (a minimum similarity). Recommendations that miss it are reported as a shortfall, never substituted.
+_Avoid_: Threshold, quality floor
+
+**Stale calibration**:
+A calibration that no longer applies because the AudioMuse deployment, selected server, Navidrome URL, or minor release changed, or because the user reset it after a model or index change.

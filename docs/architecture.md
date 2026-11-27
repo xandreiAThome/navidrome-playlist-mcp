@@ -14,9 +14,10 @@ interpret conversation and invoke structured tools over MCP stdio. The service
 owns library interpretation, draft consistency, and remote write policy.
 Credentials belong to process configuration, outside the tool contract.
 
-Multiple client processes may share the same local database. Container packaging
-retains this process-and-storage boundary; it does not introduce a network
-service. Setup and operational instructions belong in the [README](../README.md).
+Multiple client processes may share the same local database. The service is
+distributed as an npm package launched by each MCP client; packaging and the
+`setup` command do not introduce a network service or a second credential store,
+as recorded in [ADR 0005](adr/0005-distribute-via-npm-with-setup-command.md). Setup and operational instructions belong in the [README](../README.md).
 The reasons for this boundary are in
 [ADR 0001](adr/0001-external-agents-drive-a-local-playlist-service.md).
 
@@ -39,13 +40,15 @@ Matching interprets evidence about requested recordings. Discovery proposes
 library tracks through the same draft and review boundary; it does not own remote
 playlist writes. Optional discovery infrastructure remains separately managed,
 as established in
-[ADR 0003](adr/0003-optional-audiomuse-discovery.md).
+[ADR 0003](adr/0003-optional-audiomuse-discovery.md); calibration of its quality
+cutoffs is user-rated and locally owned under
+[ADR 0006](adr/0006-calibrate-in-conversation-and-store-locally.md).
 
 ## State ownership and review
 
 Navidrome owns the live library and remote playlists. Local storage owns proposed
-intent, immutable draft revisions, review records, operation history, and recovery
-decisions. Local snapshots describe intent or observed remote state; they do not
+intent, immutable draft revisions, review records, operation history, recovery
+decisions, and recommendation calibration. Local snapshots describe intent or observed remote state; they do not
 establish exclusive ownership of remote state.
 
 Edits use revision checks so stale work cannot overwrite newer intent. Preview
