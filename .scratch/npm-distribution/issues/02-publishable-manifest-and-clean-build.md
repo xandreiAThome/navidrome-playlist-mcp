@@ -1,6 +1,6 @@
 # Make the package publishable with a clean build
 
-Status: ready-for-agent
+Status: resolved
 
 Apply the manifest changes and clean `build` from the [spec](../spec.md). Verify with
 `npm pack --dry-run` that only `dist`, `drizzle`, README, LICENSE, and
