@@ -69,7 +69,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
             audiomuseUrl: z.url(),
             navidromeUrl: z.url(),
             server: z.string().min(1),
-            version: z.string().refine((version) => releaseMinor(version) !== undefined),
+            version: z.string(),
             indexModel: z.string().min(1),
             report: z.string().min(1),
             maxDistance: z.number().finite().nonnegative(),
@@ -82,6 +82,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
           calibration.server !== audiomuse.server
         )
           throw new Error('Calibration belongs to another deployment');
+        if (releaseMinor(calibration.version) === undefined)
+          throw new Problem(
+            'configuration_error',
+            `The AudioMuse calibration records an invalid version ${JSON.stringify(calibration.version)}; expected vMAJOR.MINOR.PATCH. ${supportedReleaseMessage}; the calibration must be redone on a supported release.`,
+          );
         if (!isSupportedRelease(calibration.version))
           throw new Problem(
             'configuration_error',

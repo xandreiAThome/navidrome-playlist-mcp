@@ -63,9 +63,8 @@ export class AudioMuse {
     return {
       connected: true,
       version,
-      calibrated: Boolean(
-        config.calibration && releaseMinor(config.calibration.version) === releaseMinor(version),
-      ),
+      // Both the loaded calibration and this deployment are the supported minor release.
+      calibrated: Boolean(config.calibration),
     };
   }
 

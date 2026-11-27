@@ -1143,7 +1143,19 @@ test('a deployment outside the supported minor release or with a malformed versi
     assert.equal(unsupported.status, 'audiomuse_error');
     assert.match(unsupported.message ?? '', /3\.7\.x.*v3\.7\.4.*v3\.8\.0/);
   }
-  for (const malformed of ['3.7.4', 'v3.7', 'v3.7.4-beta', 'latest', '', 374, null]) {
+  for (const malformed of [
+    '3.7.4',
+    'v3.7',
+    'v3.7.4-beta',
+    'latest',
+    '',
+    'v03.7.1',
+    'v3.007.9',
+    'v3.7.04',
+    `v3.${'0'.repeat(40)}7.1`,
+    374,
+    null,
+  ]) {
     audio.controls.version = malformed;
     for (const name of ['check_audiomuse_connection', 'discover_tracks'] as const) {
       const result = await run(name);
@@ -1151,34 +1163,6 @@ test('a deployment outside the supported minor release or with a malformed versi
       assert.match(result.message ?? '', /invalid version/);
     }
   }
-});
-
-test('a calibration from another minor release is stale and must be redone', async (t) => {
-  const remote = await navidromeFixture();
-  const audio = await audioMuseFixture();
-  audio.controls.navidromeUrl = remote.config.url;
-  t.onTestFinished(async () => {
-    await remote.close();
-    await audio.close();
-  });
-  const service = createApp({
-    ...remote.config,
-    audiomuse: {
-      url: audio.url,
-      token: 'secret-audiomuse-token',
-      server: 'navidrome',
-      budgetMs: 60000,
-      calibration: { ...calibration, version: 'v3.6.2' },
-    },
-  });
-  t.onTestFinished(() => service.close());
-  assert.deepEqual(await service.execute('check_audiomuse_connection', {}), {
-    status: 'ok',
-    data: { connected: true, calibrated: false, version: 'v3.7.4' },
-  });
-  const stale = await service.execute('discover_tracks', { description: 'jazz' });
-  assert.equal(stale.status, 'calibration_required');
-  assert.match(stale.message ?? '', /v3\.6\.2.*v3\.7\.4.*stale.*redone/);
 });
 
 test('a calibration file must record a release of the supported minor', async (t) => {
@@ -1220,6 +1204,12 @@ test('a calibration file must record a release of the supported minor', async (t
         `${version.replaceAll('.', '\\.')}.*3\\.7\\.x.*v3\\.7\\.4.*stale.*redone`,
       ),
     });
-  for (const version of ['3.7.4', 'v3.7', 'latest', 374])
-    assert.throws(await load(version), { code: 'configuration_error' });
+  for (const version of ['3.7.4', 'v3.7', 'latest', 'v03.7.1', 'v3.007.9', 'v3.7.01'])
+    assert.throws(await load(version), {
+      code: 'configuration_error',
+      message: new RegExp(
+        `invalid version "${version.replaceAll('.', '\\.')}".*vMAJOR\\.MINOR\\.PATCH.*3\\.7\\.x.*v3\\.7\\.4.*redone`,
+      ),
+    });
+  assert.throws(await load(374), { code: 'configuration_error' });
 });

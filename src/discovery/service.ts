@@ -13,7 +13,6 @@ import type {
 } from '../playlists/domain.ts';
 import type { Navidrome } from '../navidrome/client.ts';
 import type { AudioMuse } from './audiomuse.ts';
-import { releaseMinor } from './release.ts';
 
 const rowSchema = z.object({
   item_id: z.string().min(1).max(500),
@@ -54,13 +53,9 @@ export class Discovery {
         'Discovery requires a calibration report and quality thresholds for this deployment and index/model.',
       );
     const signal = AbortSignal.timeout(this.config.budgetMs);
-    const version = await this.audiomuse.supportedVersion(signal);
-    if (releaseMinor(calibration.version) !== releaseMinor(version))
-      throw new Problem(
-        'calibration_required',
-        `The calibration was made on AudioMuse ${calibration.version} but the deployment runs ${version}; calibration is stale after a minor-release change and must be redone.`,
-        { calibratedVersion: calibration.version, deploymentVersion: version },
-      );
+    // Config and the deployment check each accept only the single supported minor,
+    // so a loaded calibration always matches the deployment's minor release.
+    await this.audiomuse.supportedVersion(signal);
     await this.audiomuse.verifyServer(signal);
     return { signal, calibration };
   }
