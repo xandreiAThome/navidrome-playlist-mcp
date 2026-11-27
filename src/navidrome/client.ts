@@ -38,13 +38,71 @@ function playlistVisibility(
   return undefined;
 }
 
+const failureSchema = z.object({ error: z.object({ code: z.number() }).optional() });
+
+/** Why a Subsonic request failed, without any upstream text. */
+type Failure = { reason: 'unreachable' } | { reason: 'rejected'; subsonicCode?: number };
+class RequestFailure extends Error {
+  readonly failure: Failure;
+  constructor(failure: Failure) {
+    super('Navidrome request failed');
+    this.failure = failure;
+  }
+}
+
+export type NavidromeSettings = Pick<
+  Config,
+  'url' | 'username' | 'password' | 'timeoutMs' | 'searchPageSize' | 'searchMaxPages'
+>;
+
 export class Navidrome {
-  private readonly config: Config;
-  constructor(config: Config) {
+  private readonly config: NavidromeSettings;
+  constructor(config: NavidromeSettings) {
     this.config = config;
   }
 
   private async request(
+    endpoint: string,
+    params: [string, string][] = [],
+    signal?: AbortSignal,
+  ): Promise<Record<string, unknown>> {
+    try {
+      return await this.send(endpoint, params, signal);
+    } catch {
+      // Upstream bodies and fetch errors may contain credential-bearing URLs.
+      throw new Problem(
+        'navidrome_error',
+        'Navidrome did not return a usable successful response.',
+      );
+    }
+  }
+
+  /**
+   * Checks reachability and authentication. Failures are `navidrome_error`
+   * problems whose details say whether the server was unreachable or rejected
+   * the request (with the Subsonic error code, e.g. 40 for wrong credentials).
+   */
+  async verifyConnection(): Promise<{ type?: string; serverVersion?: string }> {
+    let envelope: Record<string, unknown>;
+    try {
+      envelope = await this.send('ping');
+    } catch (error) {
+      const failure: Failure =
+        error instanceof RequestFailure ? error.failure : { reason: 'unreachable' };
+      throw new Problem('navidrome_error', 'Navidrome connection check failed.', failure);
+    }
+    const parsed = z
+      .object({ type: z.string().optional(), serverVersion: z.string().optional() })
+      .safeParse(envelope);
+    return parsed.success
+      ? {
+          ...(parsed.data.type ? { type: parsed.data.type } : {}),
+          ...(parsed.data.serverVersion ? { serverVersion: parsed.data.serverVersion } : {}),
+        }
+      : {};
+  }
+
+  private async send(
     endpoint: string,
     params: [string, string][] = [],
     signal?: AbortSignal,
@@ -63,6 +121,7 @@ export class Navidrome {
       ['f', 'json'],
       ...params,
     ]).toString();
+    let envelope: z.infer<typeof envelopeSchema>['subsonic-response'];
     try {
       const response = await fetch(url, {
         signal: signal
@@ -71,16 +130,19 @@ export class Navidrome {
         redirect: 'error',
       });
       if (!response.ok) throw new Error('HTTP failure');
-      const envelope = envelopeSchema.parse(await response.json())['subsonic-response'];
-      if (envelope.status !== 'ok') throw new Error('API failure');
-      return envelope;
+      envelope = envelopeSchema.parse(await response.json())['subsonic-response'];
     } catch {
-      // Upstream bodies and fetch errors may contain credential-bearing URLs.
-      throw new Problem(
-        'navidrome_error',
-        'Navidrome did not return a usable successful response.',
-      );
+      // Discard the cause: fetch errors may contain credential-bearing URLs.
+      throw new RequestFailure({ reason: 'unreachable' });
     }
+    if (envelope.status !== 'ok') {
+      const code = failureSchema.safeParse(envelope).data?.error?.code;
+      throw new RequestFailure({
+        reason: 'rejected',
+        ...(code === undefined ? {} : { subsonicCode: code }),
+      });
+    }
+    return envelope;
   }
 
   async ping() {

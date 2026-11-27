@@ -38,6 +38,7 @@
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
   },
   "dependencies": {
+    "@clack/prompts": "^1.9.0",
     "@modelcontextprotocol/server": "2.4.0",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.4",
