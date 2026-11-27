@@ -9,3 +9,19 @@ against the user's deployment with the existing calibration file. Update README,
 preserving the user's uncommitted doc edits.
 
 ## Comments
+
+### 2026-11-27: live validation (read-only, via stdio MCP client on `feat/audiomuse-3.7.x`)
+
+Deployment reports `v3.7.4`; existing calibration file is `v3.7.1`
+(maxDistance 0.0968, minDescriptionSimilarity 0.5412).
+
+- `check_audiomuse_connection`: `ok`, connected, version `v3.7.4`, calibrated.
+- `find_similar_tracks` (reference "Without Love" / LMYK, count 5): 5 results,
+  scores 0.033–0.048 (all ≤ maxDistance), shortfall 0.
+- `discover_tracks` ("calm instrumental jazz", count 5): 2 results, scores
+  0.559 and 0.556 (≥ minDescriptionSimilarity), shortfall 3 reported rather than
+  padded.
+
+Live validation passes. Remaining: docs update (README, `docs/discovery.md`,
+`docs/calibration.md`), pending the user's uncommitted doc edits. Listening
+quality not judged here.
