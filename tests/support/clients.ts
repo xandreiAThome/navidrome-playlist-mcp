@@ -10,6 +10,7 @@ const NAMES: Record<ClientId, string> = {
   'gemini-cli': 'Gemini CLI',
   'github-copilot-cli': 'GitHub Copilot CLI',
   windsurf: 'Windsurf',
+  opencode: 'OpenCode',
 };
 
 /**

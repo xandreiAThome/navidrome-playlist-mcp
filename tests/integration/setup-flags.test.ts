@@ -203,7 +203,7 @@ test('secrets are not accepted as flags and unknown arguments are not echoed', (
 test('an unsupported client or malformed URL is rejected before anything runs', () => {
   assert.deepEqual(parseSetupArgs(['--client', 'emacs'], {}), {
     error:
-      '--client accepts claude-code, claude-desktop, vscode, cursor, codex, gemini-cli, github-copilot-cli, windsurf, manual.',
+      '--client accepts claude-code, claude-desktop, vscode, cursor, codex, gemini-cli, github-copilot-cli, windsurf, opencode, manual.',
   });
   assert.deepEqual(parseSetupArgs(['--url', 'music.example.com'], {}), {
     error: '--url: Enter a full URL such as https://music.example.com.',

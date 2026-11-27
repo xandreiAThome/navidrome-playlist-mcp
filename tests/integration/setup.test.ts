@@ -203,6 +203,7 @@ test('detected clients are listed first and preselected, with the manual copy la
       'gemini-cli',
       'github-copilot-cli',
       'windsurf',
+      'opencode',
       MANUAL,
     ],
   );
@@ -244,6 +245,27 @@ test('a client that cannot be written falls back to the config to copy, naming w
     'Could not write the Cursor configuration (/home/tester/cursor.json). Copy the config below instead.',
   ]);
   assert.deepEqual(manualConfig(session).mcpServers.navidrome, ENTRY());
+});
+
+test('a fallback in the client’s own config shape is shown for that client alone', async () => {
+  const path = '/home/tester/xdg/opencode/opencode.jsonc';
+  const config = '{ "mcp": { "navidrome": { "type": "local" } } }';
+  const fake = fakeClients({
+    outcomes: {
+      opencode: { status: 'manual', path, reason: 'OpenCode reads elsewhere.', config },
+    },
+  });
+  const session = await setup(
+    ACCOUNT(),
+    [multiselect(CLIENTS_PROMPT, ['opencode', 'cursor'])],
+    fake.clients,
+  );
+
+  assert.deepEqual(fake.written, [{ id: 'cursor', entry: ENTRY() }]);
+  assert.deepEqual(session.messages('warn'), [
+    `OpenCode reads elsewhere. Copy the config below into ${path}.`,
+  ]);
+  assert.deepEqual(session.messages('note'), [config]);
 });
 
 const OLD_ENTRY = () => ({

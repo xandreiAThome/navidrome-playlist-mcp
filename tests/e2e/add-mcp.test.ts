@@ -1,7 +1,15 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -72,6 +80,7 @@ test('the add-mcp adapter installs a user-scope entry, keeps other servers, and 
       'gemini-cli',
       'github-copilot-cli',
       'windsurf',
+      'opencode',
     ],
   );
   assert.deepEqual(
@@ -149,4 +158,198 @@ test('the add-mcp adapter reads an existing entry whether or not the client is d
   assert.deepEqual(result.vscode, { command: 'npx', args: ['vs'], env: {} });
   assert.deepEqual(result.codex, { command: 'npx', args: ['codex'], env: { B: '2' } });
   assert.equal(result.cursor, null);
+});
+
+const clientsModule = new URL('../../dist/setup/clients.js', import.meta.url).href;
+
+/** A child process environment whose home and config directories are under `home`. */
+function homeEnv(home: string, overrides: Record<string, string> = {}) {
+  return {
+    PATH: process.env.PATH ?? '',
+    HOME: home,
+    USERPROFILE: home,
+    APPDATA: join(home, 'AppData', 'Roaming'),
+    LOCALAPPDATA: join(home, 'AppData', 'Local'),
+    XDG_CONFIG_HOME: join(home, '.config'),
+    ...overrides,
+  };
+}
+
+const openCodeDriver = `
+const { addMcpClients } = await import(${JSON.stringify(adapter)});
+const { entryDiff } = await import(${JSON.stringify(clientsModule)});
+const clients = addMcpClients();
+const entry = (password) => ({
+  command: 'npx',
+  args: ['-y', 'pkg@1.2.3'],
+  env: { NAVIDROME_USERNAME: 'me', NAVIDROME_PASSWORD: password },
+});
+const result = {};
+result.client = (await clients.list()).find((c) => c.id === 'opencode');
+result.before = (await clients.read('opencode')) ?? null;
+result.install = clients.install('opencode', entry('first-secret'));
+result.after = (await clients.read('opencode')) ?? null;
+result.unchanged = entryDiff(result.after, entry('first-secret')) ?? null;
+result.changed = entryDiff(result.after, entry('second-secret')) ?? null;
+process.stdout.write(JSON.stringify(result));
+`;
+
+test('the add-mcp adapter installs into OpenCode and tells an unchanged entry from a changed one', async (t) => {
+  const home = mkdtempSync(join(tmpdir(), 'navidrome-setup-home-'));
+  t.onTestFinished(() => rmSync(home, { recursive: true, force: true }));
+  const dir = join(home, '.config', 'opencode');
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, 'opencode.json');
+  writeFileSync(
+    file,
+    '{\n  // my servers\n  "theme": "dark",\n  "mcp": { "other": { "type": "local", "command": ["other"] } }\n}\n',
+    { mode: 0o644 },
+  );
+
+  const { stdout } = await promisify(execFile)(
+    process.execPath,
+    ['--input-type=module', '-e', openCodeDriver],
+    { env: homeEnv(home), timeout: 10000 },
+  );
+  const result = JSON.parse(stdout) as Record<string, unknown>;
+
+  assert.deepEqual(result.client, {
+    id: 'opencode',
+    name: 'OpenCode',
+    configPath: file,
+    detected: true,
+  });
+  assert.equal(result.before, null);
+  assert.deepEqual(result.install, { status: 'written', path: file });
+  const text = readFileSync(file, 'utf8');
+  assert.match(text, /\/\/ my servers/);
+  const written = JSON.parse(text.replace(/\/\/.*$/m, '')) as {
+    theme: string;
+    mcp: Record<string, unknown>;
+  };
+  assert.equal(written.theme, 'dark');
+  assert.deepEqual(written.mcp.other, { type: 'local', command: ['other'] });
+  assert.deepEqual(written.mcp.navidrome, {
+    type: 'local',
+    command: ['npx', '-y', 'pkg@1.2.3'],
+    environment: { NAVIDROME_USERNAME: 'me', NAVIDROME_PASSWORD: 'first-secret' },
+    enabled: true,
+  });
+  assert.deepEqual(result.after, {
+    command: 'npx',
+    args: ['-y', 'pkg@1.2.3'],
+    env: { NAVIDROME_USERNAME: 'me', NAVIDROME_PASSWORD: 'first-secret' },
+  });
+  assert.equal(result.unchanged, null);
+  assert.equal(
+    result.changed,
+    [
+      '  command: npx',
+      '  args: -y pkg@1.2.3',
+      '  NAVIDROME_USERNAME: me',
+      '- NAVIDROME_PASSWORD: ********',
+      '+ NAVIDROME_PASSWORD: ******** (changed)',
+    ].join('\n'),
+  );
+  if (process.platform !== 'win32') assert.equal(statSync(file).mode & 0o777, 0o600);
+});
+
+const openCodeReadDriver = `
+const { addMcpClients } = await import(${JSON.stringify(adapter)});
+process.stdout.write(JSON.stringify((await addMcpClients().read('opencode')) ?? null));
+`;
+
+async function readOpenCode(config: object) {
+  const home = mkdtempSync(join(tmpdir(), 'navidrome-setup-home-'));
+  try {
+    mkdirSync(join(home, '.config', 'opencode'), { recursive: true });
+    writeFileSync(join(home, '.config', 'opencode', 'opencode.jsonc'), JSON.stringify(config));
+    const { stdout } = await promisify(execFile)(
+      process.execPath,
+      ['--input-type=module', '-e', openCodeReadDriver],
+      { env: homeEnv(home), timeout: 10000 },
+    );
+    return JSON.parse(stdout) as unknown;
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
+test('an OpenCode entry is recognized only as add-mcp would write it, in either layout', async () => {
+  const local = { type: 'local', command: ['npx', 'pkg'], environment: { A: '1' } };
+  const entry = { command: 'npx', args: ['pkg'], env: { A: '1' } };
+  const unrecognized = { command: '(unrecognized entry)', args: [], env: {} };
+
+  assert.deepEqual(await readOpenCode({ mcp: { servers: { navidrome: local } } }), entry);
+  assert.deepEqual(await readOpenCode({ mcp: { navidrome: { ...local, enabled: true } } }), entry);
+  // A rewrite would drop these, so the rerun must show a change and confirm.
+  assert.deepEqual(
+    await readOpenCode({ mcp: { navidrome: { ...local, enabled: false } } }),
+    unrecognized,
+  );
+  assert.deepEqual(
+    await readOpenCode({ mcp: { servers: { navidrome: { ...local, disabled: true } } } }),
+    unrecognized,
+  );
+  assert.equal(await readOpenCode({ mcp: { servers: { other: local } } }), null);
+});
+
+const openCodeXdgDriver = `
+const { addMcpClients } = await import(${JSON.stringify(adapter)});
+const clients = addMcpClients();
+const entry = { command: 'npx', args: ['pkg'], env: { NAVIDROME_PASSWORD: 'p' } };
+const result = {};
+result.client = (await clients.list()).find((c) => c.id === 'opencode');
+result.read = (await clients.read('opencode')) ?? null;
+result.install = clients.install('opencode', entry);
+process.stdout.write(JSON.stringify(result));
+`;
+
+test('OpenCode under a relocated XDG config directory falls back to the config to copy', async (t) => {
+  const home = mkdtempSync(join(tmpdir(), 'navidrome-setup-home-'));
+  t.onTestFinished(() => rmSync(home, { recursive: true, force: true }));
+  const xdg = join(home, 'xdg');
+  const file = join(xdg, 'opencode', 'opencode.json');
+  mkdirSync(join(xdg, 'opencode'), { recursive: true });
+  writeFileSync(
+    file,
+    JSON.stringify({
+      mcp: {
+        navidrome: { type: 'local', command: ['npx', 'old'], environment: {}, enabled: true },
+      },
+    }),
+  );
+
+  const { stdout } = await promisify(execFile)(
+    process.execPath,
+    ['--input-type=module', '-e', openCodeXdgDriver],
+    { env: homeEnv(home, { XDG_CONFIG_HOME: xdg }), timeout: 10000 },
+  );
+  const result = JSON.parse(stdout) as {
+    client: { configPath: string; detected: boolean };
+    read: unknown;
+    install: { status: string; path: string; reason: string; config: string };
+  };
+
+  assert.deepEqual(result.client, {
+    id: 'opencode',
+    name: 'OpenCode',
+    configPath: file,
+    detected: true,
+  });
+  assert.deepEqual(result.read, { command: 'npx', args: ['old'], env: {} });
+  assert.equal(result.install.status, 'manual');
+  assert.equal(result.install.path, file);
+  assert.match(result.install.reason, /XDG_CONFIG_HOME/);
+  assert.deepEqual(JSON.parse(result.install.config), {
+    mcp: {
+      navidrome: {
+        type: 'local',
+        command: ['npx', 'pkg'],
+        environment: { NAVIDROME_PASSWORD: 'p' },
+        enabled: true,
+      },
+    },
+  });
+  assert.equal(existsSync(join(home, '.config', 'opencode')), false);
 });

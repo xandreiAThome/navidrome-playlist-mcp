@@ -27,7 +27,7 @@ It then offers to set up AudioMuse recommendations (see
 [Want recommendations?](#want-recommendations)) and asks which MCP clients to
 install the server into. Clients found on this machine are listed first and
 preselected. Supported clients are Claude Code, Claude Desktop, VS Code, Cursor,
-Codex, Gemini CLI, GitHub Copilot CLI, and Windsurf. For anything else, choose
+Codex, Gemini CLI, GitHub Copilot CLI, Windsurf, and OpenCode. For anything else, choose
 "Show config to copy manually". Restart your MCP client afterwards to load the
 server.
 
@@ -36,7 +36,9 @@ pinned to the version you ran, and leaves the client's other servers alone. It
 keeps your credentials only in that entry's `env` block and makes the file
 readable only by you. To upgrade or change credentials, run setup again. When a
 client already has the entry, setup shows what would change, with secrets
-masked, and asks before overwriting.
+masked, and asks before overwriting. If `XDG_CONFIG_HOME` points somewhere
+other than `~/.config`, setup prints the OpenCode entry for you to copy instead
+of writing it.
 
 ### Run setup without prompts
 
@@ -51,7 +53,7 @@ Flags answer setup's questions so it can run from a script:
 | `--yes`, `-y`           | Asks nothing; see below.                                                          |
 
 Client IDs are `claude-code`, `claude-desktop`, `vscode`, `cursor`, `codex`,
-`gemini-cli`, `github-copilot-cli`, `windsurf`, and `manual`. Secrets are never
+`gemini-cli`, `github-copilot-cli`, `windsurf`, `opencode`, and `manual`. Secrets are never
 flags: setup reads the password from `NAVIDROME_PASSWORD` and the AudioMuse
 token from `AUDIOMUSE_API_TOKEN`, or asks for them. Without `--yes`, setup asks
 only for what the flags leave out. `--yes` needs `--url`, `--username`,

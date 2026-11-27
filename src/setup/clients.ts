@@ -16,6 +16,7 @@ export const SUPPORTED_CLIENTS = [
   'gemini-cli',
   'github-copilot-cli',
   'windsurf',
+  'opencode',
 ] as const;
 export type ClientId = (typeof SUPPORTED_CLIENTS)[number];
 
@@ -24,8 +25,11 @@ export type Client = { id: ClientId; name: string; configPath: string; detected:
 export type InstallOutcome =
   /** The entry was written to the client's user-scope configuration. */
   | { status: 'written'; path: string }
-  /** Writing would not reach the client; the user must copy the entry to `path`. */
-  | { status: 'manual'; path: string; reason: string }
+  /**
+   * Writing would not reach the client; the user must copy the entry to `path`,
+   * as `config` when the client needs its own shape, else the common one.
+   */
+  | { status: 'manual'; path: string; reason: string; config?: string }
   | { status: 'failed'; path: string };
 
 /** User-scope MCP client configuration, as setup needs it. */
@@ -127,6 +131,7 @@ export async function clientStep(
       required: true,
     }));
   let showManual = selected.includes(MANUAL);
+  let printed = false;
   const written: string[] = [];
   try {
     for (const client of ordered.filter((c) => selected.includes(c.id))) {
@@ -135,6 +140,10 @@ export async function clientStep(
       if (outcome.status === 'written') {
         written.push(`${client.name} (${outcome.path})`);
         prompts.log.success(`Installed into ${client.name} (${outcome.path}).`);
+      } else if (outcome.status === 'manual' && outcome.config !== undefined) {
+        prompts.log.warn(`${outcome.reason} Copy the config below into ${outcome.path}.`);
+        prompts.note(outcome.config, `Add this server to ${client.name}`);
+        printed = true;
       } else {
         showManual = true;
         if (outcome.status === 'manual')
@@ -151,5 +160,5 @@ export async function clientStep(
     throw error;
   }
   if (showManual) prompts.note(manualConfig(entry), 'Add this server to your MCP client');
-  return written.length > 0 || showManual;
+  return written.length > 0 || showManual || printed;
 }
