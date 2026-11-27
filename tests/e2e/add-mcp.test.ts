@@ -94,3 +94,59 @@ test('the add-mcp adapter installs a user-scope entry, keeps other servers, and 
     for (const file of [claudeJson, result.cursor.path])
       assert.equal(statSync(file).mode & 0o777, 0o600, file);
 });
+
+const readDriver = `
+const { addMcpClients } = await import(${JSON.stringify(adapter)});
+const clients = addMcpClients();
+const list = await clients.list();
+const result = { detected: list.filter((c) => c.detected).map((c) => c.id) };
+for (const id of ['claude-code', 'vscode', 'codex', 'cursor'])
+  result[id] = (await clients.read(id)) ?? null;
+process.stdout.write(JSON.stringify(result));
+`;
+
+test('the add-mcp adapter reads an existing entry whether or not the client is detected', async (t) => {
+  const home = mkdtempSync(join(tmpdir(), 'navidrome-setup-home-'));
+  t.onTestFinished(() => rmSync(home, { recursive: true, force: true }));
+  // No ~/.claude directory: add-mcp does not detect Claude Code, yet its file has an entry.
+  writeFileSync(
+    join(home, '.claude.json'),
+    JSON.stringify({
+      mcpServers: { navidrome: { command: 'npx', args: ['old'], env: { A: '1' } } },
+    }),
+  );
+  const vscode = join(home, '.config', 'Code', 'User');
+  mkdirSync(vscode, { recursive: true });
+  writeFileSync(
+    join(vscode, 'mcp.json'),
+    '{\n  // a comment\n  "servers": { "navidrome": { "command": "npx", "args": ["vs"] } }\n}\n',
+  );
+  mkdirSync(join(home, '.codex'));
+  writeFileSync(
+    join(home, '.codex', 'config.toml'),
+    '[mcp_servers.navidrome]\ncommand = "npx"\nargs = ["codex"]\n\n[mcp_servers.navidrome.env]\nB = "2"\n',
+  );
+
+  const { stdout } = await promisify(execFile)(
+    process.execPath,
+    ['--input-type=module', '-e', readDriver],
+    {
+      env: {
+        PATH: process.env.PATH ?? '',
+        HOME: home,
+        USERPROFILE: home,
+        APPDATA: join(home, 'AppData', 'Roaming'),
+        LOCALAPPDATA: join(home, 'AppData', 'Local'),
+        XDG_CONFIG_HOME: join(home, '.config'),
+      },
+      timeout: 10000,
+    },
+  );
+  const result = JSON.parse(stdout) as Record<string, unknown>;
+
+  assert.ok(!(result.detected as string[]).includes('claude-code'));
+  assert.deepEqual(result['claude-code'], { command: 'npx', args: ['old'], env: { A: '1' } });
+  assert.deepEqual(result.vscode, { command: 'npx', args: ['vs'], env: {} });
+  assert.deepEqual(result.codex, { command: 'npx', args: ['codex'], env: { B: '2' } });
+  assert.equal(result.cursor, null);
+});

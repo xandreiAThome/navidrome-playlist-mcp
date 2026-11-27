@@ -1,12 +1,8 @@
-import { chmodSync, readdirSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  agents,
-  detectGlobalAgents,
-  getAgentTypes,
-  listInstalledServers,
-  upsertServer,
-} from 'add-mcp';
+import * as TOML from '@iarna/toml';
+import { agents, detectGlobalAgents, getAgentTypes, upsertServer } from 'add-mcp';
+import * as jsonc from 'jsonc-parser';
 import type { AgentType } from 'add-mcp';
 import { z } from 'zod';
 import { SUPPORTED_CLIENTS } from './clients.ts';
@@ -26,6 +22,34 @@ const onDisk = z.object({
 
 /** Shown in place of an existing entry setup cannot interpret, forcing a confirm. */
 const UNRECOGNIZED: ServerEntry = { command: '(unrecognized entry)', args: [], env: {} };
+
+/**
+ * The named server entry in a client's user-scope file, raw as stored, or
+ * `null` when the file or entry is absent. add-mcp 2.6.1's `listInstalledServers`
+ * reports an undetected client (for example Claude Code with `~/.claude.json` but
+ * no `~/.claude/`) as empty without reading its file, so the file is read here
+ * with the parsers add-mcp itself uses. Throws when the file cannot be parsed.
+ */
+function storedEntry(id: ClientId): unknown {
+  const agent = agents[id];
+  if (!existsSync(agent.configPath)) return null;
+  const text = readFileSync(agent.configPath, 'utf8');
+  const errors: jsonc.ParseError[] = [];
+  const config: unknown =
+    agent.format === 'toml'
+      ? TOML.parse(text)
+      : agent.format === 'json'
+        ? jsonc.parse(text, errors)
+        : undefined;
+  if (config === undefined || errors.length) throw new Error('Unreadable client configuration');
+  let node: unknown = config;
+  for (const key of [...agent.configKey.split('.'), ENTRY_NAME]) {
+    if (!node || typeof node !== 'object' || !Object.hasOwn(node, key)) return null;
+    // Checked above to be an object owning `key`; TypeScript cannot index `object`.
+    node = (node as Record<string, unknown>)[key];
+  }
+  return node;
+}
 
 /**
  * The Microsoft Store (MSIX) build of Claude Desktop on Windows reads a
@@ -61,11 +85,15 @@ export function addMcpClients(): Clients {
       }));
     },
     async read(id: ClientId) {
-      // An undetected client is reported without reading its file, so as empty.
-      const [record] = await listInstalledServers({ global: true, agents: [id] });
-      const found = record?.servers.find((s) => s.serverName === ENTRY_NAME);
-      if (!found) return undefined;
-      const parsed = onDisk.safeParse(found.config);
+      let stored: unknown;
+      try {
+        stored = storedEntry(id);
+      } catch {
+        // A file setup cannot read may still hold an entry: confirm before writing.
+        return UNRECOGNIZED;
+      }
+      if (stored === null) return undefined;
+      const parsed = onDisk.safeParse(stored);
       return parsed.success ? parsed.data : UNRECOGNIZED;
     },
     install(id, entry) {
