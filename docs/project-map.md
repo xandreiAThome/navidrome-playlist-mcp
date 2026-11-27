@@ -20,6 +20,7 @@ accessing the local tracker.
 The [pack smoke test](../scripts/pack-smoke.ts) verifies the published artifact:
 CI packs the build, installs the tarball in a clean directory, and completes the
 MCP `initialize` handshake on Linux, macOS, and Windows.
+Pushing a `v*` tag publishes to npm; see [releasing](releasing.md).
 
 For tooling, use [package.json](../package.json) and [.nvmrc](../.nvmrc) for runtime
 and dependency requirements, [TypeScript](../tsconfig.json) and
