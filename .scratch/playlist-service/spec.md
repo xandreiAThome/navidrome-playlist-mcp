@@ -1,6 +1,6 @@
 # Agent-driven Navidrome playlist service
 
-Status: ready-for-agent
+Status: done
 
 This is the consolidated design confirmed in the design interview. It is the
 implementation and review specification; see `GLOSSARY.md` and `docs/adr/`.

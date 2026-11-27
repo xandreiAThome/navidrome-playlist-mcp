@@ -11,6 +11,8 @@ Issues and specs live as Markdown files in `.scratch/`.
   with one file per ticket.
 - Record triage state as a `Status:` line near the top of each issue.
   Use the role strings in `triage-labels.md`.
+- Each spec carries a `Status:` line under its title. Set it to `done` in
+  the same change that resolves the spec's last ticket.
 - Append comments and conversation history under `## Comments`.
 
 ## Publishing issues and specs

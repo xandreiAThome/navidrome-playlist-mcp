@@ -1,5 +1,7 @@
 # AudioMuse-AI discovery and playlist expansion
 
+Status: done
+
 Agreed by the user after the design interview. Planning is complete; implementation is not authorized.
 
 ## Agreed scope

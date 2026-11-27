@@ -1,5 +1,7 @@
 # Maintainability refactor
 
+Status: done
+
 Authorized by `$implement /tmp/navidrome-mcp-handoff-kx3f1qo9.md`.
 Review baseline: db955ca12266770dd2851d048f5a553035a04e3d.
 
