@@ -1,17 +1,26 @@
 {
-  "name": "navidrome-playlist-mcp",
+  "name": "@xandreiathome/navidrome-playlist-mcp",
   "version": "0.1.0",
-  "private": true,
   "packageManager": "pnpm@12.18.0",
   "type": "module",
   "description": "Local agent-driven Navidrome playlist service",
+  "bin": {
+    "navidrome-playlist-mcp": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "drizzle"
+  ],
   "engines": {
     "node": ">=26.13.0"
   },
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env src/cli.ts",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "start": "node dist/cli.js",
     "test": "pnpm build && vitest run",
