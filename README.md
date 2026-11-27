@@ -42,7 +42,9 @@ docker compose build
 Add this to your MCP client's configuration and replace the paths:
 The example includes `compose.override.yaml` for the AudioMuse calibration mount
 described in the [calibration guide](docs/calibration.md). If you haven't created
-that override, omit its `--file` argument and path.
+that override, omit its `--file` argument and path, and leave
+`AUDIOMUSE_CALIBRATION_PATH` unset in `.env`: inside the container it must name a
+mounted container path, never a path on the host.
 
 ```json
 {
@@ -87,6 +89,9 @@ pnpm build
 
 Copy [.env.example](.env.example) to `.env` if you haven't configured one already.
 Fill in your Navidrome credentials and set `NAVIDROME_DB_PATH` to an absolute path.
+The `AUDIOMUSE_CALIBRATION_PATH` you set must also be absolute: relative paths
+resolve against the MCP client's working directory, which may not be this
+checkout.
 
 For your MCP client, use `node` as the command with these arguments:
 
@@ -165,10 +170,14 @@ retry rules.
 - Set `NAVIDROME_REQUIRE_APPROVAL=true` to require your agent to assert approval
   of the exact preview before writing.
 - Drafts and recovery history persist in SQLite: Docker uses the `playlist-data`
-  volume; local runs default to `.data/playlists.sqlite`. Keep backups and retain
-  the volume when upgrading.
+  volume; local runs default to `.data/playlists.sqlite`, resolved from the process
+  working directory. Set `NAVIDROME_DB_PATH` to an absolute path so every MCP
+  client shares one database. Keep backups and retain the volume when upgrading.
 - If a write's outcome is uncertain, inspect and reconcile it before trying again.
   The server blocks uncertain appends to prevent accidental duplicates.
+- If the server exits immediately, it prints one generic startup error on purpose.
+  Check that absolute paths in `.env` (`NAVIDROME_DB_PATH`,
+  `AUDIOMUSE_CALIBRATION_PATH`) still exist after moving or renaming the checkout.
 - Keep credentials in `.env` or your process environment.
 
 [Playlist workflows and recovery](docs/playlist-workflows.md) explains the tools.
@@ -177,6 +186,7 @@ retry rules.
 ## Development
 
 ```sh
+pnpm dev
 pnpm check       # formatting, lint, types, build, and tests
 pnpm test:watch  # integration tests while editing
 ```
