@@ -17,12 +17,17 @@ const repo = fileURLToPath(new URL('..', import.meta.url));
 const root = mkdtempSync(join(tmpdir(), 'navidrome-pack-smoke-'));
 const timeoutMs = 120_000;
 
-// Windows needs a shell to run npm.cmd and bin shims, so the quoted command line
-// goes to the shell; elsewhere the command and arguments are passed directly.
+const quote = (part: string) => `"${part}"`;
+
+// Windows needs a shell to run npm.cmd and bin shims, so the command line goes to
+// the shell; elsewhere the command and arguments are passed directly. A command
+// name found through PATH must stay unquoted: cmd.exe resolves `%~dp0` in a batch
+// file invoked by a quoted name to the current directory, which sends npm.cmd
+// looking for npm-cli.js under the working directory.
 function platformCommand(command: string, args: string[]) {
   return windows
     ? {
-        file: [command, ...args].map((part) => `"${part}"`).join(' '),
+        file: [/\s/.test(command) ? quote(command) : command, ...args.map(quote)].join(' '),
         args: [],
         shell: true,
       }
