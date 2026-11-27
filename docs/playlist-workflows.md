@@ -64,8 +64,7 @@ remains unknown and prevents appending until compatibility is established.
 Local runs default to `navidrome-playlist-mcp/playlists.sqlite` in the per-user
 data directory listed in the [README](../README.md#a-few-things-to-know);
 `NAVIDROME_DB_PATH` overrides it. Keep the same server URL and username for an
-existing database. To move a database out of the former Docker `playlist-data`
-volume, follow [Moving from Docker](../README.md#moving-from-docker). A database
+existing database. A database
 left in `.data/playlists.sqlite` is not imported automatically; see the README
 upgrade note.
 
