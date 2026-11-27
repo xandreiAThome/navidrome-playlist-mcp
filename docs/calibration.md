@@ -200,35 +200,12 @@ or renaming the checkout. `AUDIOMUSE_CALIBRATION_PATH`, in contrast, is resolved
 by the process: update it after moving the repository, or startup fails with a
 configuration error.
 
-For Docker, the file must be mounted into the container. Create
-`compose.override.yaml`:
-
-```yaml
-services:
-  navidrome-mcp:
-    volumes:
-      - ./.data/audiomuse-calibration.json:/config/audiomuse-calibration.json:ro
-    environment:
-      AUDIOMUSE_CALIBRATION_PATH: /config/audiomuse-calibration.json
-```
-
-The MCP configuration in the README passes an explicit `--file`. Add another
-`--file` argument for `/absolute/path/to/navidrome-playlist-mcp/compose.override.yaml`
-after the existing Compose file argument so this mount is included.
-
-The container cannot read the host path used for local runs. The override replaces
-`AUDIOMUSE_CALIBRATION_PATH` with the mounted `/config/audiomuse-calibration.json`
-path, so use both `--file` arguments whenever calibration is enabled. If you run
-Compose without the override, leave `AUDIOMUSE_CALIBRATION_PATH` unset in `.env`.
-
 ## 6. Verify through the service
 
 Build the service and reconnect your MCP client so it loads the new configuration:
 
 ```bash
 pnpm build
-# For Docker instead:
-# docker compose build
 ```
 
 Call `check_audiomuse_connection` with `{}`. It should return `status: "ok"`,
