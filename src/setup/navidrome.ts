@@ -2,7 +2,7 @@ import { Navidrome } from '../navidrome/client.ts';
 import { Problem } from '../playlists/domain.ts';
 import { required } from './prompts.ts';
 import type { Prompts } from './prompts.ts';
-import { normalizeNavidromeUrl } from './url.ts';
+import { NAVIDROME_URL, askUrl } from './url.ts';
 
 export type NavidromeAccount = { url: string; username: string; password: string };
 
@@ -41,21 +41,6 @@ async function verify(
   }
 }
 
-const askUrl = async (prompts: Prompts, initial?: string) => {
-  const answer = await prompts.text({
-    message: 'Navidrome URL',
-    placeholder: 'https://music.example.com',
-    ...(initial ? { initial } : {}),
-    validate: (value) => {
-      const normalized = normalizeNavidromeUrl(value);
-      return 'error' in normalized ? normalized.error : undefined;
-    },
-  });
-  const normalized = normalizeNavidromeUrl(answer);
-  // The prompt's validation already rejected anything that does not normalize.
-  if ('error' in normalized) throw new Error(normalized.error);
-  return normalized.url;
-};
 const askUsername = (prompts: Prompts, initial?: string) =>
   prompts.text({
     message: 'Navidrome username',
@@ -77,7 +62,7 @@ export async function navidromeStep(
   given: Partial<NavidromeAccount> = {},
 ): Promise<NavidromeAccount> {
   const account = {
-    url: given.url ?? (await askUrl(prompts)),
+    url: given.url ?? (await askUrl(prompts, NAVIDROME_URL)),
     username: given.username ?? (await askUsername(prompts)),
     password: given.password ?? (await askPassword(prompts)),
   };
@@ -87,7 +72,7 @@ export async function navidromeStep(
       prompts.log.success(`Connected to ${verdict.server} as ${account.username}.`);
       return account;
     }
-    if (verdict.retry === 'url') account.url = await askUrl(prompts, account.url);
+    if (verdict.retry === 'url') account.url = await askUrl(prompts, NAVIDROME_URL, account.url);
     else {
       account.username = await askUsername(prompts, account.username);
       account.password = await askPassword(prompts);

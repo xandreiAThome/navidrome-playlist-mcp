@@ -213,3 +213,13 @@ test('an unsupported client or malformed URL is rejected before anything runs', 
     'https://music.example.com',
   );
 });
+
+test('--audiomuse-url is normalized as an AudioMuse base URL, keeping any /rest path', () => {
+  assert.deepEqual(parseSetupArgs(['--audiomuse-url', 'audiomuse.example.com'], {}), {
+    error: '--audiomuse-url: Enter a full URL such as http://audiomuse.example.com:8000.',
+  });
+  assert.equal(
+    flags(['--audiomuse-url', 'https://music.example.com/rest/'], {}).audiomuse?.url,
+    'https://music.example.com/rest',
+  );
+});

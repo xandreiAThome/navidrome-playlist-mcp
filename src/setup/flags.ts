@@ -1,7 +1,8 @@
 import { parseArgs } from 'node:util';
 import { SUPPORTED_CLIENTS } from './clients.ts';
 import type { Selection } from './clients.ts';
-import { normalizeNavidromeUrl } from './url.ts';
+import { AUDIOMUSE_URL, NAVIDROME_URL, normalizeBaseUrl } from './url.ts';
+import type { UrlService } from './url.ts';
 
 /**
  * Answers given on the command line and in the environment. A present value is
@@ -55,16 +56,16 @@ export function parseSetupArgs(
     // parseArgs messages can quote the offending argument.
     return { error: `Invalid arguments. ${USAGE}` };
   }
-  const url = (flag: string, value: string | undefined) => {
+  const url = (flag: string, service: UrlService, value: string | undefined) => {
     if (value === undefined) return {};
-    const normalized = normalizeNavidromeUrl(value);
+    const normalized = normalizeBaseUrl(service, value);
     return 'error' in normalized
       ? { error: `${flag}: ${normalized.error}` }
       : { url: normalized.url };
   };
-  const navidromeUrl = url('--url', values.url);
+  const navidromeUrl = url('--url', NAVIDROME_URL, values.url);
   if ('error' in navidromeUrl) return { error: navidromeUrl.error! };
-  const audiomuseUrl = url('--audiomuse-url', values['audiomuse-url']);
+  const audiomuseUrl = url('--audiomuse-url', AUDIOMUSE_URL, values['audiomuse-url']);
   if ('error' in audiomuseUrl) return { error: audiomuseUrl.error! };
   if (values.client?.some((client) => !SELECTIONS.includes(client)))
     return { error: `--client accepts ${SELECTIONS.join(', ')}.` };

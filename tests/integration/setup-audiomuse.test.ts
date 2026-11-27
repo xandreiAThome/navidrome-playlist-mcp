@@ -218,6 +218,23 @@ test('a rejected token is explained and only the token is asked again', async ()
   assert.equal(shown.includes(AUDIOMUSE_TOKEN) || shown.includes('wrong-token'), false);
 });
 
+test('an AudioMuse URL that cannot be a base URL is explained in AudioMuse terms', async () => {
+  const { session } = await setup([
+    confirm(OPT_IN, true),
+    text(AUDIOMUSE_URL, 'audiomuse.example.com'),
+    text(AUDIOMUSE_URL, `http://user:pass@${new URL(audio.url).host}`),
+    text(AUDIOMUSE_URL, audio.url),
+    password(AUDIOMUSE_TOKEN_PROMPT, AUDIOMUSE_TOKEN),
+  ]);
+  assert.deepEqual(
+    session.events.flatMap((e) => (e.kind === 'invalid' ? [e.error] : [])),
+    [
+      'Enter a full URL such as http://audiomuse.example.com:8000.',
+      'Leave credentials out of the URL; setup asks for the API token next.',
+    ],
+  );
+});
+
 test('an unreachable AudioMuse is explained and only the URL is asked again', async () => {
   const unreachable = audio.url;
   await audio.close();

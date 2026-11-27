@@ -3,25 +3,10 @@ import { supportedReleaseMessage } from '../discovery/release.ts';
 import { Problem } from '../playlists/domain.ts';
 import type { Prompts } from './prompts.ts';
 import { required } from './prompts.ts';
-import { normalizeNavidromeUrl } from './url.ts';
+import { AUDIOMUSE_URL, askUrl } from './url.ts';
 
 export type AudioMuseSettings = { url: string; token: string; server: string };
 
-const askUrl = async (prompts: Prompts, initial?: string) => {
-  const answer = await prompts.text({
-    message: 'AudioMuse URL',
-    placeholder: 'http://audiomuse.example.com:8000',
-    ...(initial ? { initial } : {}),
-    validate: (value) => {
-      const normalized = normalizeNavidromeUrl(value);
-      return 'error' in normalized ? normalized.error : undefined;
-    },
-  });
-  const normalized = normalizeNavidromeUrl(answer);
-  // The prompt's validation already rejected anything that does not normalize.
-  if ('error' in normalized) throw new Error(normalized.error);
-  return normalized.url;
-};
 const askToken = (prompts: Prompts) =>
   prompts.password({ message: 'AudioMuse API token', validate: required('API token') });
 
@@ -44,7 +29,7 @@ export async function audioMuseStep(
   )
     return undefined;
   const settings = {
-    url: given ? given.url : await askUrl(prompts),
+    url: given ? given.url : await askUrl(prompts, AUDIOMUSE_URL),
     token: given?.token ?? (await askToken(prompts)),
   };
   for (;;) {
@@ -61,7 +46,7 @@ export async function audioMuseStep(
       }))
     )
       return undefined;
-    if (verdict.retry === 'url') settings.url = await askUrl(prompts, settings.url);
+    if (verdict.retry === 'url') settings.url = await askUrl(prompts, AUDIOMUSE_URL, settings.url);
     else if (verdict.retry === 'token') settings.token = await askToken(prompts);
   }
 }
