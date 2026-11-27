@@ -17,6 +17,10 @@ live in [coding standards](coding-standards.md).
 For specs and issues, follow [tracker conventions](agents/issue-tracker.md) before
 accessing the local tracker.
 
+The [pack smoke test](../scripts/pack-smoke.ts) verifies the published artifact:
+CI packs the build, installs the tarball in a clean directory, and completes the
+MCP `initialize` handshake on Linux, macOS, and Windows.
+
 For tooling, use [package.json](../package.json) and [.nvmrc](../.nvmrc) for runtime
 and dependency requirements, [TypeScript](../tsconfig.json) and
 [build configuration](../tsconfig.build.json) for compilation,

@@ -1,6 +1,6 @@
 # Add a cross-platform pack smoke test to CI
 
-Status: ready-for-agent
+Status: resolved
 Blocked by: 02
 
 Add the ubuntu/macos/windows job from the [spec](../spec.md): pack, install the
