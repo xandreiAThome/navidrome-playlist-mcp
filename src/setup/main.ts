@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import * as clack from '@clack/prompts';
 import { z } from 'zod';
 import { addMcpClients } from './add-mcp.ts';
-import { SetupCancelled } from './prompts.ts';
+import { parseSetupArgs } from './flags.ts';
+import { SetupCancelled, SetupFailed } from './prompts.ts';
 import { runSetup } from './run.ts';
 import { terminalPrompts } from './terminal.ts';
 
@@ -15,15 +16,24 @@ function ownVersion(): string {
 
 /** Entry point for `navidrome-playlist-mcp setup`; returns the exit code. */
 export async function main(args: string[]): Promise<number> {
-  if (args.length) {
-    // Do not echo arguments: a mistyped secret must not be printed back.
-    process.stderr.write('setup does not accept arguments; run it without options.\n');
+  const flags = parseSetupArgs(args, process.env);
+  if ('error' in flags) {
+    process.stderr.write(`${flags.error}\n`);
     return 2;
   }
   clack.intro('navidrome-playlist-mcp setup');
   try {
-    await runSetup({ prompts: terminalPrompts, clients: addMcpClients(), version: ownVersion() });
+    await runSetup({
+      prompts: terminalPrompts,
+      clients: addMcpClients(),
+      version: ownVersion(),
+      flags,
+    });
   } catch (error) {
+    if (error instanceof SetupFailed) {
+      clack.cancel(error.message);
+      return 1;
+    }
     if (error instanceof SetupCancelled) {
       clack.cancel('Setup cancelled; nothing was written.');
       return 1;

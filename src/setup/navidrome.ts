@@ -68,16 +68,18 @@ const askPassword = (prompts: Prompts) =>
 /**
  * Asks for the Navidrome account and returns it only once it verifies. A failure
  * is explained and the value at fault is asked again; setup never continues with
- * a failing account.
+ * a failing account. Given values are tried before asking; they are asked
+ * again only when they fail.
  */
 export async function navidromeStep(
   prompts: Prompts,
   timeoutMs: number,
+  given: Partial<NavidromeAccount> = {},
 ): Promise<NavidromeAccount> {
   const account = {
-    url: await askUrl(prompts),
-    username: await askUsername(prompts),
-    password: await askPassword(prompts),
+    url: given.url ?? (await askUrl(prompts)),
+    username: given.username ?? (await askUsername(prompts)),
+    password: given.password ?? (await askPassword(prompts)),
   };
   for (;;) {
     const verdict = await verify(account, timeoutMs, prompts);

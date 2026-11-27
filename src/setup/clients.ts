@@ -72,6 +72,7 @@ async function shouldWrite(
   clients: Clients,
   client: Client,
   entry: ServerEntry,
+  overwrite: boolean,
 ): Promise<boolean> {
   const existing = await clients.read(client.id);
   if (!existing) return true;
@@ -81,25 +82,29 @@ async function shouldWrite(
     return false;
   }
   prompts.note(diff, `Changes to the navidrome server in ${client.name}`);
-  const overwrite = await prompts.confirm({
+  if (overwrite) return true;
+  const confirmed = await prompts.confirm({
     message: `Overwrite the navidrome server in ${client.name}?`,
     initial: false,
   });
-  if (!overwrite) prompts.log.info(`Left ${client.name} unchanged.`);
-  return overwrite;
+  if (!confirmed) prompts.log.info(`Left ${client.name} unchanged.`);
+  return confirmed;
 }
 
 const MANUAL = 'manual';
-type Selection = ClientId | typeof MANUAL;
+export type Selection = ClientId | typeof MANUAL;
 
 /**
  * Asks which clients to install into, detected ones first and preselected, and
  * installs the entry into each. The manual option prints the entry to copy.
+ * A given selection is used without asking; `overwrite` replaces existing
+ * entries without confirming, still showing what changes.
  */
 export async function clientStep(
   prompts: Prompts,
   clients: Clients,
   entry: ServerEntry,
+  { selection, overwrite = false }: { selection?: Selection[]; overwrite?: boolean } = {},
 ): Promise<void> {
   const all = await clients.list();
   const ordered = [...all.filter((c) => c.detected), ...all.filter((c) => !c.detected)];
@@ -111,15 +116,17 @@ export async function clientStep(
     })),
     { value: MANUAL, label: 'Show config to copy manually' },
   ];
-  const selected = await prompts.multiselect<Selection>({
-    message: 'Install the server into which clients?',
-    choices,
-    initial: ordered.filter((c) => c.detected).map((c) => c.id),
-    required: true,
-  });
+  const selected =
+    selection ??
+    (await prompts.multiselect<Selection>({
+      message: 'Install the server into which clients?',
+      choices,
+      initial: ordered.filter((c) => c.detected).map((c) => c.id),
+      required: true,
+    }));
   let showManual = selected.includes(MANUAL);
   for (const client of ordered.filter((c) => selected.includes(c.id))) {
-    if (!(await shouldWrite(prompts, clients, client, entry))) continue;
+    if (!(await shouldWrite(prompts, clients, client, entry, overwrite))) continue;
     const outcome = clients.install(client.id, entry);
     if (outcome.status === 'written')
       prompts.log.success(`Installed into ${client.name} (${outcome.path}).`);

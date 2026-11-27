@@ -29,15 +29,24 @@ const askToken = (prompts: Prompts) =>
  * Offers AudioMuse recommendations. On opt-in, returns settings only once the
  * deployment authenticates, runs a supported release, and exposes the given
  * Navidrome as a media server; returns undefined when the user declines or skips.
+ * Given settings opt in without asking; `false` declines without asking.
  */
 export async function audioMuseStep(
   prompts: Prompts,
   navidromeUrl: string,
   timeoutMs: number,
+  given?: { url: string; token?: string } | false,
 ): Promise<AudioMuseSettings | undefined> {
-  if (!(await prompts.confirm({ message: 'Set up AudioMuse recommendations?', initial: false })))
+  if (given === false) return undefined;
+  if (
+    !given &&
+    !(await prompts.confirm({ message: 'Set up AudioMuse recommendations?', initial: false }))
+  )
     return undefined;
-  const settings = { url: await askUrl(prompts), token: await askToken(prompts) };
+  const settings = {
+    url: given ? given.url : await askUrl(prompts),
+    token: given?.token ?? (await askToken(prompts)),
+  };
   for (;;) {
     const verdict = await verify(settings, navidromeUrl, timeoutMs, prompts);
     if ('server' in verdict) {

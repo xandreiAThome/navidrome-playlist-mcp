@@ -40,6 +40,31 @@ export class SetupCancelled extends Error {
   }
 }
 
+/** Setup stopped without writing anything; the message is safe to print. */
+export class SetupFailed extends Error {}
+
+/**
+ * Prompts for unattended runs: messages are shown as usual, but any question
+ * fails setup, because the only questions left are ones flags cannot answer,
+ * such as asking again for a value that did not verify.
+ */
+export function unattended(prompts: Prompts): Prompts {
+  const refuse = (message: string): never => {
+    throw new SetupFailed(
+      `--yes cannot answer "${message}". Nothing was written; fix the problem above or run setup without --yes.`,
+    );
+  };
+  return {
+    text: async ({ message }) => refuse(message),
+    password: async ({ message }) => refuse(message),
+    confirm: async ({ message }) => refuse(message),
+    select: async ({ message }) => refuse(message),
+    multiselect: async ({ message }) => refuse(message),
+    log: prompts.log,
+    note: (body, title) => prompts.note(body, title),
+  };
+}
+
 export const required =
   (label: string): Validate =>
   (value) =>
