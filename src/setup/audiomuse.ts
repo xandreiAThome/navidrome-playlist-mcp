@@ -34,10 +34,7 @@ export async function audioMuseStep(
   };
   for (;;) {
     const verdict = await verify(settings, navidromeUrl, timeoutMs, prompts);
-    if ('server' in verdict) {
-      prompts.log.info('Ask your assistant to calibrate recommendations.');
-      return { ...settings, server: verdict.server };
-    }
+    if ('server' in verdict) return { ...settings, server: verdict.server };
     if (
       verdict.skippable &&
       (await prompts.confirm({

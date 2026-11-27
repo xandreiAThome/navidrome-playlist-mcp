@@ -30,15 +30,15 @@ const navidromeAnswers = (): Answer[] => [
   password(/Navidrome password/, 'secret-password'),
 ];
 
-async function setup(script: Answer[]) {
-  const session = scriptedPrompts([
-    ...navidromeAnswers(),
-    ...script,
-    multiselect(/install/i, ['manual']),
-  ]);
+async function setup(
+  script: Answer[],
+  clientScript: Answer[] = [multiselect(/install/i, ['manual'])],
+  clients = fakeClients().clients,
+) {
+  const session = scriptedPrompts([...navidromeAnswers(), ...script, ...clientScript]);
   const entry = await runSetup({
     prompts: session.prompts,
-    clients: fakeClients().clients,
+    clients,
     version: '9.8.7',
     timeoutMs: 1000,
   });
@@ -92,7 +92,31 @@ test('the single AudioMuse server for this Navidrome is detected and written', a
   assert.deepEqual(session.messages('success').slice(1), [
     'Connected to AudioMuse v3.7.4 using media server Home.',
   ]);
+  // Setup closes with the calibration hint, after the config to copy.
+  assert.deepEqual(session.events.slice(-2), [
+    {
+      kind: 'note',
+      message: session.messages('note')[0],
+      title: 'Add this server to your MCP client',
+    },
+    { kind: 'info', message: 'Ask your assistant to calibrate recommendations.' },
+  ]);
   assert.deepEqual(session.messages('info'), ['Ask your assistant to calibrate recommendations.']);
+});
+
+test('the calibration hint is not shown when no client received the configuration', async () => {
+  const existing = { command: 'npx', args: ['old'], env: {} };
+  const { session, env } = await setup(
+    [
+      confirm(OPT_IN, true),
+      text(AUDIOMUSE_URL, audio.url),
+      password(AUDIOMUSE_TOKEN_PROMPT, AUDIOMUSE_TOKEN),
+    ],
+    [multiselect(/install/i, ['cursor']), confirm(/Overwrite/, false)],
+    fakeClients({ entries: { cursor: existing } }).clients,
+  );
+  assert.equal(env.AUDIOMUSE_SERVER, 'navidrome');
+  assert.deepEqual(session.messages('info'), ['Left Cursor unchanged.']);
 });
 
 const select = (message: RegExp, value: string): Answer => ({ kind: 'select', message, value });

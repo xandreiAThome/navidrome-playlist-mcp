@@ -52,9 +52,11 @@ export async function runSetup({
       AUDIOMUSE_SERVER: audiomuse.server,
     }),
   });
-  await clientStep(prompts, clients, entry, {
+  const delivered = await clientStep(prompts, clients, entry, {
     ...(flags.clients && { selection: flags.clients }),
     overwrite: flags.yes,
   });
+  // Calibration runs through the installed server, so it is the closing step.
+  if (audiomuse && delivered) prompts.log.info('Ask your assistant to calibrate recommendations.');
   return entry;
 }

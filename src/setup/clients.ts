@@ -98,14 +98,15 @@ export type Selection = ClientId | typeof MANUAL;
  * Asks which clients to install into, detected ones first and preselected, and
  * installs the entry into each. The manual option prints the entry to copy.
  * A given selection is used without asking; `overwrite` replaces existing
- * entries without confirming, still showing what changes.
+ * entries without confirming, still showing what changes. Returns whether
+ * the entry reached the user: written to a client or printed to copy.
  */
 export async function clientStep(
   prompts: Prompts,
   clients: Clients,
   entry: ServerEntry,
   { selection, overwrite = false }: { selection?: Selection[]; overwrite?: boolean } = {},
-): Promise<void> {
+): Promise<boolean> {
   const all = await clients.list();
   const ordered = [...all.filter((c) => c.detected), ...all.filter((c) => !c.detected)];
   const choices: Choice<Selection>[] = [
@@ -125,12 +126,14 @@ export async function clientStep(
       required: true,
     }));
   let showManual = selected.includes(MANUAL);
+  let written = false;
   for (const client of ordered.filter((c) => selected.includes(c.id))) {
     if (!(await shouldWrite(prompts, clients, client, entry, overwrite))) continue;
     const outcome = clients.install(client.id, entry);
-    if (outcome.status === 'written')
+    if (outcome.status === 'written') {
+      written = true;
       prompts.log.success(`Installed into ${client.name} (${outcome.path}).`);
-    else {
+    } else {
       showManual = true;
       if (outcome.status === 'manual')
         prompts.log.warn(`${outcome.reason} Copy the config below into ${outcome.path}.`);
@@ -142,4 +145,5 @@ export async function clientStep(
     }
   }
   if (showManual) prompts.note(manualConfig(entry), 'Add this server to your MCP client');
+  return written || showManual;
 }
