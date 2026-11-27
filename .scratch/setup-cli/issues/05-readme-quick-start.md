@@ -1,6 +1,6 @@
 # Rebuild the README around `setup`
 
-Status: ready-for-agent
+Status: done
 Blocked by: 03
 
 Quick start is the single `setup` command; keep a short manual-config section with
@@ -13,3 +13,8 @@ enable AudioMuse in `setup` and ask the assistant to calibrate.
   guidance: the README section and its reference in
   `docs/playlist-workflows.md`. Leave ADRs and closed specs as historical
   records.
+- 2026-11-27 (agent): Done. README quick start is now the `setup` command, with
+  a hand-configuration section (variable table, one example) and AudioMuse
+  recommendations via setup. Removed "Moving from Docker" from README and its
+  link in `docs/playlist-workflows.md`; ADRs and closed specs left as is. Flags
+  from ticket 04 are not documented yet.
