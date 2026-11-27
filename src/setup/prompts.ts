@@ -44,6 +44,19 @@ export class SetupCancelled extends Error {
 export class SetupFailed extends Error {}
 
 /**
+ * Setup stopped (cancelled or failed, the `cause`) after it had already written
+ * some clients. The message, safe to print, names what was written.
+ */
+export class SetupInterrupted extends Error {
+  constructor(cause: unknown, written: string[]) {
+    super(
+      `Setup ${cause instanceof SetupCancelled ? 'cancelled' : 'stopped'} after installing into ${written.join(', ')}; nothing else was written.`,
+      { cause },
+    );
+  }
+}
+
+/**
  * Prompts for unattended runs: messages are shown as usual, but any question
  * fails setup, because the only questions left are ones flags cannot answer,
  * such as asking again for a value that did not verify.

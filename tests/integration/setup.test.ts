@@ -8,7 +8,7 @@ import { confirm, multiselect, password, scriptedPrompts, text } from '../suppor
 import type { Answer, Event } from '../support/prompts.ts';
 import type { Choice } from '../../src/setup/prompts.ts';
 import { runSetup } from '../../src/setup/run.ts';
-import { SetupCancelled } from '../../src/setup/prompts.ts';
+import { SetupCancelled, SetupInterrupted } from '../../src/setup/prompts.ts';
 
 let remote: Awaited<ReturnType<typeof navidromeFixture>>;
 beforeEach(async () => {
@@ -304,6 +304,33 @@ test('declining the overwrite leaves that client unchanged and still installs th
   );
   assert.deepEqual(fake.written, [{ id: 'cursor', entry: ENTRY() }]);
   assert.deepEqual(session.messages('info'), ['Left Claude Code unchanged.']);
+});
+
+test('cancelling after some clients were written reports what was written', async () => {
+  const fake = fakeClients({ entries: { cursor: OLD_ENTRY() } });
+  const session = scriptedPrompts([
+    ...ACCOUNT(),
+    multiselect(CLIENTS_PROMPT, ['claude-code', 'cursor']),
+    // No answer to the Cursor overwrite: the user cancels there.
+  ]);
+  await assert.rejects(
+    runSetup({
+      prompts: session.prompts,
+      clients: fake.clients,
+      version: '9.8.7',
+      timeoutMs: 1000,
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof SetupInterrupted);
+      assert.ok(error.cause instanceof SetupCancelled);
+      assert.equal(
+        error.message,
+        'Setup cancelled after installing into Claude Code (/home/tester/claude-code.json); nothing else was written.',
+      );
+      return true;
+    },
+  );
+  assert.deepEqual(fake.written, [{ id: 'claude-code', entry: ENTRY() }]);
 });
 
 test('an entry that already matches is not rewritten or confirmed', async () => {

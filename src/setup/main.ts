@@ -3,7 +3,7 @@ import * as clack from '@clack/prompts';
 import { z } from 'zod';
 import { addMcpClients } from './add-mcp.ts';
 import { parseSetupArgs } from './flags.ts';
-import { SetupCancelled, SetupFailed } from './prompts.ts';
+import { SetupCancelled, SetupFailed, SetupInterrupted } from './prompts.ts';
 import { runSetup } from './run.ts';
 import { terminalPrompts } from './terminal.ts';
 
@@ -30,6 +30,11 @@ export async function main(args: string[]): Promise<number> {
       flags,
     });
   } catch (error) {
+    // Names the clients already written; nothing else in it is user input.
+    if (error instanceof SetupInterrupted) {
+      clack.cancel(error.message);
+      return 1;
+    }
     if (error instanceof SetupFailed) {
       clack.cancel(error.message);
       return 1;

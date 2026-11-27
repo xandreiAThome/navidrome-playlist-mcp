@@ -1,5 +1,6 @@
 import { manualConfig } from './entry.ts';
 import type { ServerEntry } from './entry.ts';
+import { SetupInterrupted } from './prompts.ts';
 import type { Choice, Prompts } from './prompts.ts';
 
 /**
@@ -126,24 +127,29 @@ export async function clientStep(
       required: true,
     }));
   let showManual = selected.includes(MANUAL);
-  let written = false;
-  for (const client of ordered.filter((c) => selected.includes(c.id))) {
-    if (!(await shouldWrite(prompts, clients, client, entry, overwrite))) continue;
-    const outcome = clients.install(client.id, entry);
-    if (outcome.status === 'written') {
-      written = true;
-      prompts.log.success(`Installed into ${client.name} (${outcome.path}).`);
-    } else {
-      showManual = true;
-      if (outcome.status === 'manual')
-        prompts.log.warn(`${outcome.reason} Copy the config below into ${outcome.path}.`);
-      // add-mcp's error text is not shown: it is not vetted to be free of secrets.
-      else
-        prompts.log.error(
-          `Could not write the ${client.name} configuration (${outcome.path}). Copy the config below instead.`,
-        );
+  const written: string[] = [];
+  try {
+    for (const client of ordered.filter((c) => selected.includes(c.id))) {
+      if (!(await shouldWrite(prompts, clients, client, entry, overwrite))) continue;
+      const outcome = clients.install(client.id, entry);
+      if (outcome.status === 'written') {
+        written.push(`${client.name} (${outcome.path})`);
+        prompts.log.success(`Installed into ${client.name} (${outcome.path}).`);
+      } else {
+        showManual = true;
+        if (outcome.status === 'manual')
+          prompts.log.warn(`${outcome.reason} Copy the config below into ${outcome.path}.`);
+        // add-mcp's error text is not shown: it is not vetted to be free of secrets.
+        else
+          prompts.log.error(
+            `Could not write the ${client.name} configuration (${outcome.path}). Copy the config below instead.`,
+          );
+      }
     }
+  } catch (error) {
+    if (written.length) throw new SetupInterrupted(error, written);
+    throw error;
   }
   if (showManual) prompts.note(manualConfig(entry), 'Add this server to your MCP client');
-  return written || showManual;
+  return written.length > 0 || showManual;
 }
