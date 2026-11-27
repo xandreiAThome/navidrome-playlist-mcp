@@ -1,6 +1,6 @@
 # Distribute as an npm package
 
-Status: ready-for-agent
+Status: done
 
 Blocked by: [audiomuse-3.7.4](../audiomuse-3.7.4/spec.md).
 Decision record: [ADR 0005](../../docs/adr/0005-distribute-via-npm-with-setup-command.md).
@@ -53,8 +53,10 @@ macOS, and Windows. Behavior and guarantees are unchanged.
   tarball in a clean directory, starts the binary, and completes the MCP
   `initialize` handshake on ubuntu, macos, and windows.
 - Release: a workflow on `v*` tags publishes with npm trusted publishing (OIDC) and
-  provenance, after the checks pass.
-- Later: publish `server.json` to the official MCP Registry (`mcpName` in
+  provenance, after the checks pass. It stages the version, and the maintainer
+  approves it with 2FA ([releasing](../../docs/releasing.md)).
+- Later (optional, [ticket 06](issues/06-mcp-registry-listing.md), not required to
+  complete this spec): publish `server.json` to the official MCP Registry (`mcpName` in
   `package.json`, `mcp-publisher` in the release workflow), marking
   `NAVIDROME_PASSWORD` and `AUDIOMUSE_API_TOKEN` secret.
 
