@@ -61,13 +61,11 @@ remains unknown and prevents appending until compatibility is established.
 
 ## Storage and upgrades
 
-Docker stores SQLite in the `playlist-data` volume at `/data/playlists.sqlite`.
 Local runs default to `.data/playlists.sqlite`. Keep the same server URL and
-username for an existing database; host databases are not automatically imported
-into Docker.
+username for an existing database. To move a database out of the former Docker
+`playlist-data` volume, follow [Moving from Docker](../README.md#moving-from-docker).
 
 Pending database migrations run automatically at startup in one transaction.
 Failure rolls back the migration and stops startup. Before upgrading, stop clients
-and back up the database, then rebuild with `docker compose build --pull` and
-reconnect. Retain the volume: `docker compose down --volumes` deletes stored state.
+and back up the database, then change the pinned package version and reconnect.
 Rollback requires restoring the pre-upgrade backup.
