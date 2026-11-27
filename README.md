@@ -10,73 +10,53 @@ Connect it to an MCP client, then ask for what you want:
 You can review matches and preview the result before anything changes in
 Navidrome. Existing playlists keep their name, visibility, and track order.
 
-## Get started with Docker
+## Get started
 
-You'll need a running Navidrome server and Docker with Compose.
+You'll need a running Navidrome server and Node 26.13.0 or newer.
 
-If you don't already have a configured `.env`:
-
-```sh
-cp .env.docker.example .env
-chmod 600 .env
-```
-
-Edit these values in `.env`:
-
-```dotenv
-NAVIDROME_URL=http://host.docker.internal:4533
-NAVIDROME_USERNAME=your-user
-NAVIDROME_PASSWORD='your-subsonic-password'
-```
-
-Use your Navidrome base URL, without `/rest`. The example above reaches Navidrome
-on the Docker host; it must listen on an address the container can reach.
-Keep passwords containing `$` or `#` single-quoted.
-
-Build the image:
-
-```sh
-docker compose build
-```
-
-Add this to your MCP client's configuration and replace the paths:
-The example includes `compose.override.yaml` for the AudioMuse calibration mount
-described in the [calibration guide](docs/calibration.md). If you haven't created
-that override, omit its `--file` argument and path, and leave
-`AUDIOMUSE_CALIBRATION_PATH` unset in `.env`: inside the container it must name a
-mounted container path, never a path on the host.
+Add this to your MCP client's configuration, replacing `<version>` with a
+published version and the values with your own:
 
 ```json
 {
   "mcpServers": {
     "navidrome": {
-      "command": "docker",
-      "args": [
-        "compose",
-        "--project-directory",
-        "/absolute/path/to/navidrome-playlist-mcp",
-        "--file",
-        "/absolute/path/to/navidrome-playlist-mcp/compose.yaml",
-        "--file",
-        "/absolute/path/to/navidrome-playlist-mcp/compose.override.yaml",
-        "--env-file",
-        "/absolute/path/to/navidrome-playlist-mcp/.env",
-        "run",
-        "--rm",
-        "-T",
-        "navidrome-mcp"
-      ]
+      "command": "npx",
+      "args": ["-y", "@xandreiathome/navidrome-playlist-mcp@<version>"],
+      "env": {
+        "NAVIDROME_URL": "http://localhost:4533",
+        "NAVIDROME_USERNAME": "your-user",
+        "NAVIDROME_PASSWORD": "your-subsonic-password"
+      }
     }
   }
 }
 ```
 
-Your MCP client starts the server when it connects. Use `compose run`, as shown,
-rather than `compose up -d`: this server communicates over stdin/stdout.
-`--rm` removes the container when the client disconnects, and `-T` disables the
-terminal so MCP messages pass through unchanged. Explicit `--file` arguments
-disable automatic override loading, so include both files when using the
-calibration mount.
+Use your Navidrome base URL, without `/rest`. Your MCP client starts the server
+when it connects; it communicates over stdin/stdout. The installed server reads
+settings only from its process environment, so put them in the client's `env`
+block rather than a `.env` file. [.env.example](.env.example) lists every setting.
+Pinning the version means upgrades happen only when you change it.
+
+### Moving from Docker
+
+Earlier versions ran in Docker and kept the database in the `playlist-data`
+volume. Stop your MCP clients, then copy the database files out of the volume
+(Compose named it `navidrome-mcp_playlist-data`; `docker volume ls` shows it):
+
+```sh
+docker run --rm --user "$(id -u):$(id -g)" \
+  -v navidrome-mcp_playlist-data:/data:ro -v "$PWD":/backup \
+  alpine sh -c 'cp /data/playlists.sqlite* /backup/'
+```
+
+Set `NAVIDROME_DB_PATH` to the absolute path of the copied `playlists.sqlite`.
+A database only opens with the exact `NAVIDROME_URL` and username that created
+it, so keep the same URL. If you used `http://host.docker.internal:4533`, keep
+that value and make the name resolve to Navidrome's address on this machine (for
+example, a hosts-file entry). After confirming the copy works, you can delete the
+volume and the `navidrome-mcp:local` image.
 
 ## Run locally instead
 
@@ -88,8 +68,9 @@ pnpm build
 ```
 
 Copy [.env.example](.env.example) to `.env` if you haven't configured one already.
-Fill in your Navidrome credentials and set `NAVIDROME_DB_PATH` to an absolute path.
-The `AUDIOMUSE_CALIBRATION_PATH` you set must also be absolute: relative paths
+Fill in your Navidrome credentials. `NAVIDROME_DB_PATH` is optional; leave it
+unset to use the per-user default described under
+[A few things to know](#a-few-things-to-know). The `AUDIOMUSE_CALIBRATION_PATH` you set must also be absolute: relative paths
 resolve against the MCP client's working directory, which may not be this
 checkout.
 
@@ -107,7 +88,7 @@ For your MCP client, use `node` as the command with these arguments:
 Song lists work on their own. For similarity and description-based
 recommendations, connect a separately installed AudioMuse-AI 3.7.x instance (validated on v3.7.4).
 
-Set `AUDIOMUSE_URL`, `AUDIOMUSE_API_TOKEN`, and `AUDIOMUSE_SERVER` in `.env`.
+Set `AUDIOMUSE_URL`, `AUDIOMUSE_API_TOKEN`, and `AUDIOMUSE_SERVER` alongside the\nNavidrome settings.
 The server value is the `server_id` of your Navidrome connection in AudioMuse's
 `GET /api/servers` response. Discovery also needs
 `AUDIOMUSE_CALIBRATION_PATH`, a quality-calibration file for your deployment.
@@ -169,10 +150,19 @@ retry rules.
 - New playlists default to public. Ask for private when you want it.
 - Set `NAVIDROME_REQUIRE_APPROVAL=true` to require your agent to assert approval
   of the exact preview before writing.
-- Drafts and recovery history persist in SQLite: Docker uses the `playlist-data`
-  volume; local runs default to `.data/playlists.sqlite`, resolved from the process
-  working directory. Set `NAVIDROME_DB_PATH` to an absolute path so every MCP
-  client shares one database. Keep backups and retain the volume when upgrading.
+- Drafts and recovery history persist in SQLite. Local runs default to
+  `navidrome-playlist-mcp/playlists.sqlite` in your per-user data directory, so
+  every MCP client shares one database regardless of its working directory:
+  - Linux: `$XDG_DATA_HOME`, or `~/.local/share` when unset.
+  - macOS: `~/Library/Application Support`.
+  - Windows: `%LOCALAPPDATA%`.
+
+  Set `NAVIDROME_DB_PATH` to use another location. Keep backups when upgrading.
+
+- Upgrading from a version that stored the database in `.data/playlists.sqlite`
+  under the working directory? Either set `NAVIDROME_DB_PATH` to that file's
+  absolute path or move the file to the new default location. The server does not
+  detect or import the old file.
 - If a write's outcome is uncertain, inspect and reconcile it before trying again.
   The server blocks uncertain appends to prevent accidental duplicates.
 - If the server exits immediately, it prints one generic startup error on purpose.

@@ -1,6 +1,6 @@
 # Remove Docker packaging and its documentation
 
-Status: ready-for-agent
+Status: resolved
 
 Delete the container files and Docker/Compose documentation listed in the
 [spec](../spec.md), add the `playlist-data` volume copy-out note, and document manual

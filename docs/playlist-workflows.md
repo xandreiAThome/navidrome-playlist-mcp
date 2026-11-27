@@ -61,13 +61,15 @@ remains unknown and prevents appending until compatibility is established.
 
 ## Storage and upgrades
 
-Docker stores SQLite in the `playlist-data` volume at `/data/playlists.sqlite`.
-Local runs default to `.data/playlists.sqlite`. Keep the same server URL and
-username for an existing database; host databases are not automatically imported
-into Docker.
+Local runs default to `navidrome-playlist-mcp/playlists.sqlite` in the per-user
+data directory listed in the [README](../README.md#a-few-things-to-know);
+`NAVIDROME_DB_PATH` overrides it. Keep the same server URL and username for an
+existing database. To move a database out of the former Docker `playlist-data`
+volume, follow [Moving from Docker](../README.md#moving-from-docker). A database
+left in `.data/playlists.sqlite` is not imported automatically; see the README
+upgrade note.
 
 Pending database migrations run automatically at startup in one transaction.
 Failure rolls back the migration and stops startup. Before upgrading, stop clients
-and back up the database, then rebuild with `docker compose build --pull` and
-reconnect. Retain the volume: `docker compose down --volumes` deletes stored state.
+and back up the database, then change the pinned package version and reconnect.
 Rollback requires restoring the pre-upgrade backup.

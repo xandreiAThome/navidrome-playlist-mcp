@@ -26,7 +26,7 @@ and dependency requirements, [TypeScript](../tsconfig.json) and
 [build configuration](../tsconfig.build.json) for compilation,
 [ESLint](../eslint.config.js) and [Prettier](../.prettierrc.json) for mechanical
 rules, and [Vitest configuration](../vitest.config.ts) for test projects.
-[Dockerfile](../Dockerfile) and [Compose](../compose.yaml) define packaging;
+[package.json](../package.json) also defines the published npm package;
 the [README](../README.md) owns setup and usage.
 
 Update this map when these entry points move or their responsibilities change.

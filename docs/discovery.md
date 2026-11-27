@@ -90,9 +90,3 @@ establish identity; uncertain versions remain visible for review. Set
 is ambiguous on 3.7.x and fails conservatively with the reference ID, preserving
 the draft. Other upstream failures, budget exhaustion, and concurrent edits also
 apply no partial additions. Missing analysis is never silently skipped.
-
-Compose forwards the optional AudioMuse settings from `.env`. Calibration paths
-must exist **inside the container**; use a Compose override to bind-mount your
-calibration file read-only, then set `AUDIOMUSE_CALIBRATION_PATH` to its container
-path. Keep credentials in `.env`, and rebuild the image to include new tools and
-migrations.
