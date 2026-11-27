@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # npm trusted publishing (OIDC) and provenance
+      id-token: write # npm trusted staged publishing (OIDC) and provenance
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -30,4 +30,4 @@ jobs:
           fi
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: npm publish --provenance --access public
+      - run: npm stage publish --provenance --access public
