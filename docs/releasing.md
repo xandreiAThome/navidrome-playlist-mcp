@@ -10,8 +10,8 @@ provenance. No npm token is stored in the repository.
 2. Tag that commit with the same version and push the tag:
 
    ```sh
-   git tag v0.1.0
-   git push origin v0.1.0
+   git tag v0.1.1
+   git push origin v0.1.1
    ```
 
 The workflow fails before publishing if the tag does not match the
