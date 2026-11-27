@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import * as clack from '@clack/prompts';
 import { z } from 'zod';
+import { addMcpClients } from './add-mcp.ts';
 import { SetupCancelled } from './prompts.ts';
 import { runSetup } from './run.ts';
 import { terminalPrompts } from './terminal.ts';
@@ -21,7 +22,7 @@ export async function main(args: string[]): Promise<number> {
   }
   clack.intro('navidrome-playlist-mcp setup');
   try {
-    await runSetup({ prompts: terminalPrompts, version: ownVersion() });
+    await runSetup({ prompts: terminalPrompts, clients: addMcpClients(), version: ownVersion() });
   } catch (error) {
     if (error instanceof SetupCancelled) {
       clack.cancel('Setup cancelled; nothing was written.');

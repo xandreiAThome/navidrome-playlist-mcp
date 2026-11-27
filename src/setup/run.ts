@@ -1,10 +1,14 @@
-import { manualConfig, serverEntry } from './entry.ts';
+import { clientStep } from './clients.ts';
+import type { Clients } from './clients.ts';
+import { serverEntry } from './entry.ts';
 import type { ServerEntry } from './entry.ts';
 import { navidromeStep } from './navidrome.ts';
 import type { Prompts } from './prompts.ts';
 
 export type SetupOptions = {
   prompts: Prompts;
+  /** The MCP clients the entry can be installed into. */
+  clients: Clients;
   /** Package version pinned in the installed entry. */
   version: string;
   /** Bound for each verification request. */
@@ -17,6 +21,7 @@ export type SetupOptions = {
  */
 export async function runSetup({
   prompts,
+  clients,
   version,
   timeoutMs = 15000,
 }: SetupOptions): Promise<ServerEntry> {
@@ -26,6 +31,6 @@ export async function runSetup({
     NAVIDROME_USERNAME: navidrome.username,
     NAVIDROME_PASSWORD: navidrome.password,
   });
-  prompts.note(manualConfig(entry), 'Add this server to your MCP client');
+  await clientStep(prompts, clients, entry);
   return entry;
 }

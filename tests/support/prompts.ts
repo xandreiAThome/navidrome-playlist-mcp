@@ -21,6 +21,11 @@ export const confirm = (message: RegExp, value: boolean): Answer => ({
   message,
   value,
 });
+export const multiselect = (message: RegExp, value: unknown[]): Answer => ({
+  kind: 'multiselect',
+  message,
+  value,
+});
 
 /**
  * Answers prompts from a script in order and records everything shown. Like the
