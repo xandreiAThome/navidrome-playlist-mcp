@@ -52,15 +52,15 @@ am_get() {
 Check the version and selected connection:
 
 ```bash
-am_get /api/version | jq -e '.app_version == "v3.7.1"'
+am_get /api/version | jq -e '.app_version | test("^v3\\.7\\.(0|[1-9][0-9]*)$")'
 am_get /api/servers |
   jq '.servers[] | {server_id, name, server_type}'
 ```
 
 The version check should print `true`. Use the `server_id` of the Navidrome
 connection you want to calibrate, pointing to the same `NAVIDROME_URL` as this
-service. Confirm the URL in AudioMuse's media-server settings. The current adapter
-is validated for AudioMuse v3.7.1.
+service. Confirm the URL in AudioMuse's media-server settings. The adapter supports
+AudioMuse 3.7.x and is validated on v3.7.4.
 
 ## 2. Collect similar-song candidates
 
@@ -170,17 +170,19 @@ Set these to the values you measured, replacing the illustrative numbers:
 MAX_DISTANCE='0.08'
 MIN_DESCRIPTION_SIMILARITY='0.62'
 INDEX_MODEL='replace-with-models-metric-and-index-build-or-analysis-date'
+AUDIOMUSE_VERSION="$(am_get /api/version | jq -r '.app_version')"
 
 jq -n \
   --arg audiomuseUrl "${AUDIOMUSE_URL%/}" \
   --arg navidromeUrl "${NAVIDROME_URL%/}" \
   --arg server "$AUDIOMUSE_SERVER" \
+  --arg version "$AUDIOMUSE_VERSION" \
   --arg indexModel "$INDEX_MODEL" \
   --arg report '.data/calibration/report.md' \
   --argjson maxDistance "$MAX_DISTANCE" \
   --argjson minDescriptionSimilarity "$MIN_DESCRIPTION_SIMILARITY" \
   '{audiomuseUrl: $audiomuseUrl, navidromeUrl: $navidromeUrl,
-    server: $server, version: "v3.7.1", indexModel: $indexModel,
+    server: $server, version: $version, indexModel: $indexModel,
     report: $report, maxDistance: $maxDistance,
     minDescriptionSimilarity: $minDescriptionSimilarity}' \
   > .data/audiomuse-calibration.json
@@ -251,6 +253,7 @@ examples. A small calibration is a starting point, not a guarantee for all queri
 
 ## When to repeat this
 
-Recalibrate after changing the AudioMuse release, models, distance metric, index
-settings, or library. The application checks URLs, server selection, and release,
-but it cannot detect every model or index change for you.
+Recalibrate after changing the AudioMuse minor release (for example 3.7 to 3.8),
+models, distance metric, index settings, or library. Patch releases within 3.7.x
+keep your calibration. The application checks URLs, server selection, and minor
+release, but it cannot detect every model or index change for you.

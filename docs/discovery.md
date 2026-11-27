@@ -3,7 +3,8 @@
 For a first-time setup, follow the [step-by-step calibration guide](calibration.md).
 
 AudioMuse-AI is separately managed; this service does not install models or trigger
-analysis. The adapter is validated against **v3.7.1**. Explicit song-list workflows
+analysis. The adapter supports **3.7.x** releases and is validated against **v3.7.4**;
+other minor releases are rejected until validated. Explicit song-list workflows
 remain available when AudioMuse is absent or unavailable.
 
 Set `AUDIOMUSE_URL`, `AUDIOMUSE_API_TOKEN`, and `AUDIOMUSE_SERVER` together.
@@ -31,7 +32,7 @@ and whether calibration is configured. Discovery requires
   "audiomuseUrl": "https://audiomuse.example.com",
   "navidromeUrl": "https://music.example.com",
   "server": "your-navidrome-server-id",
-  "version": "v3.7.1",
+  "version": "v3.7.4",
   "indexModel": "identify the deployed MusicNN/CLAP models, index, and metric",
   "report": "path or reference to your measured calibration report",
   "maxDistance": 0.1,
@@ -43,8 +44,9 @@ and whether calibration is configured. Discovery requires
 recommendations.** Measure suitable quality floors against representative
 single-style and mixed-style playlists for your index/model. Distances and CLAP
 similarities are separate measures. Recalibrate when models, index settings, metric,
-release, or library change. Deployment URLs and server selection must match the
-report, and the runtime rejects a changed release. Version and coverage do not
+minor release, or library change. Deployment URLs and server selection must match
+the report. A calibration from another minor release is rejected as stale; patch
+releases within 3.7.x keep it. Version and coverage do not
 fingerprint an index build: operators must invalidate calibration after model or
 index changes. Without a report, discovery returns `calibration_required`.
 
@@ -85,7 +87,7 @@ Alternate filtering uses matching artists and normalized recording titles to
 exclude confidently identified alternate recordings. Similar titles alone do not
 establish identity; uncertain versions remain visible for review. Set
 `allowAlternateVersions: true` to override filtering. A similarity/availability 404
-is ambiguous on v3.7.1 and fails conservatively with the reference ID, preserving
+is ambiguous on 3.7.x and fails conservatively with the reference ID, preserving
 the draft. Other upstream failures, budget exhaustion, and concurrent edits also
 apply no partial additions. Missing analysis is never silently skipped.
 

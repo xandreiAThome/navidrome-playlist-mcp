@@ -1,6 +1,6 @@
 # Support AudioMuse 3.7.x, validated against v3.7.4
 
-Status: ready-for-agent
+Status: done
 
 Prerequisite for [npm-distribution](../npm-distribution/spec.md). The user's
 AudioMuse deployment was upgraded from v3.7.1 to v3.7.4; the adapter hard-codes

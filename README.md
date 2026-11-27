@@ -105,7 +105,7 @@ For your MCP client, use `node` as the command with these arguments:
 ## Want recommendations?
 
 Song lists work on their own. For similarity and description-based
-recommendations, connect a separately installed AudioMuse-AI v3.7.1 instance.
+recommendations, connect a separately installed AudioMuse-AI 3.7.x instance (validated on v3.7.4).
 
 Set `AUDIOMUSE_URL`, `AUDIOMUSE_API_TOKEN`, and `AUDIOMUSE_SERVER` in `.env`.
 The server value is the `server_id` of your Navidrome connection in AudioMuse's
