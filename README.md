@@ -38,6 +38,33 @@ readable only by you. To upgrade or change credentials, run setup again. When a
 client already has the entry, setup shows what would change, with secrets
 masked, and asks before overwriting.
 
+### Run setup without prompts
+
+Flags answer setup's questions so it can run from a script:
+
+| Flag                    | Answers                                                                           |
+| ----------------------- | --------------------------------------------------------------------------------- |
+| `--url <url>`           | The Navidrome URL.                                                                |
+| `--username <name>`     | The Navidrome username.                                                           |
+| `--client <id>`         | A client to install into; repeat for several. `manual` prints the config to copy. |
+| `--audiomuse-url <url>` | Sets up AudioMuse at this URL.                                                    |
+| `--yes`, `-y`           | Asks nothing; see below.                                                          |
+
+Client IDs are `claude-code`, `claude-desktop`, `vscode`, `cursor`, `codex`,
+`gemini-cli`, `github-copilot-cli`, `windsurf`, and `manual`. Secrets are never
+flags: setup reads the password from `NAVIDROME_PASSWORD` and the AudioMuse
+token from `AUDIOMUSE_API_TOKEN`, or asks for them. Without `--yes`, setup asks
+only for what the flags leave out. `--yes` needs `--url`, `--username`,
+`--client`, and `NAVIDROME_PASSWORD` (plus `AUDIOMUSE_API_TOKEN` with
+`--audiomuse-url`), skips AudioMuse without `--audiomuse-url`, and stops before
+writing anything if a value fails its check. It overwrites an existing entry
+after showing its masked diff.
+
+```sh
+NAVIDROME_PASSWORD=... npx @xandreiathome/navidrome-playlist-mcp@latest setup \
+  --yes --url https://music.example.com --username me --client claude-code
+```
+
 ### Configure a client by hand
 
 Your MCP client starts the server over stdin/stdout. The installed server reads

@@ -1,6 +1,6 @@
 # Interactive setup command
 
-Status: ready-for-agent
+Status: done
 
 Blocked by: [npm-distribution](../npm-distribution/spec.md).
 Decision record: [ADR 0005](../../docs/adr/0005-distribute-via-npm-with-setup-command.md).
