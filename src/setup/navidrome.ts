@@ -1,13 +1,10 @@
-import { Navidrome } from '../navidrome/client.ts';
-import { Problem } from '../playlists/domain.ts';
+import { ConnectionFailed, Navidrome, SubsonicError } from '../navidrome/client.ts';
+import type { Failure } from '../navidrome/client.ts';
 import { required } from './prompts.ts';
 import type { Prompts } from './prompts.ts';
 import { NAVIDROME_URL, askUrl } from './url.ts';
 
 export type NavidromeAccount = { url: string; username: string; password: string };
-
-const WRONG_CREDENTIALS = 40;
-const TOKEN_AUTH_UNSUPPORTED = 41;
 
 type Verdict = { ok: true; server: string } | { ok: false; retry: 'url' | 'credentials' };
 
@@ -22,22 +19,29 @@ async function verify(
     const name = type === 'navidrome' ? 'Navidrome' : type || 'a Subsonic server';
     return { ok: true, server: serverVersion ? `${name} ${serverVersion}` : name };
   } catch (error) {
-    if (!(error instanceof Problem)) throw error;
-    const details = error.details as { reason?: string; subsonicCode?: number } | undefined;
-    if (details?.reason !== 'rejected') {
+    if (!(error instanceof ConnectionFailed)) throw error;
+    const { failure } = error;
+    if (failure.reason === 'unreachable') {
       prompts.log.error(
         `Could not reach a Navidrome server at ${account.url}. Check the address and that the server is running.`,
       );
       return { ok: false, retry: 'url' };
     }
-    prompts.log.error(
-      details.subsonicCode === WRONG_CREDENTIALS
-        ? 'Navidrome rejected the username or password.'
-        : details.subsonicCode === TOKEN_AUTH_UNSUPPORTED
-          ? 'Navidrome does not accept token authentication for this account (for example, LDAP users). Use a local Navidrome account.'
-          : `Navidrome refused the request${details.subsonicCode === undefined ? '' : ` (Subsonic error ${details.subsonicCode})`}. Check the account.`,
-    );
+    prompts.log.error(rejection(failure));
     return { ok: false, retry: 'credentials' };
+  }
+}
+
+function rejection({ subsonicCode }: Extract<Failure, { reason: 'rejected' }>): string {
+  switch (subsonicCode) {
+    case SubsonicError.wrongCredentials:
+      return 'Navidrome rejected the username or password.';
+    case SubsonicError.tokenAuthUnsupported:
+      return 'Navidrome does not accept token authentication for this account (for example, LDAP users). Use a local Navidrome account.';
+    case undefined:
+      return 'Navidrome refused the request. Check the account.';
+    default:
+      return `Navidrome refused the request (Subsonic error ${subsonicCode}). Check the account.`;
   }
 }
 

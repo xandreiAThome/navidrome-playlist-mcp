@@ -1,4 +1,4 @@
-import { AudioMuse } from '../discovery/audiomuse.ts';
+import { AudioMuse, RequestFailed, UnsupportedRelease } from '../discovery/audiomuse.ts';
 import { supportedReleaseMessage } from '../discovery/release.ts';
 import { Problem } from '../playlists/domain.ts';
 import type { Prompts } from './prompts.ts';
@@ -70,21 +70,22 @@ async function verify(
     servers = await audiomuse.navidromeServers(signal);
   } catch (error) {
     if (!(error instanceof Problem)) throw error;
-    const details = error.details as { reason?: string; httpStatus?: number; version?: string };
-    if (details?.version !== undefined) {
-      prompts.log.error(`${supportedReleaseMessage}; the deployment runs ${details.version}.`);
+    if (error instanceof UnsupportedRelease) {
+      prompts.log.error(`${supportedReleaseMessage}; the deployment runs ${error.version}.`);
       return { retry: 'url', skippable: true };
     }
-    if (details?.reason === 'rejected' && [401, 403].includes(details.httpStatus ?? 0)) {
+    const failure = error instanceof RequestFailed ? error.failure : undefined;
+    if (failure?.reason === 'rejected' && [401, 403].includes(failure.httpStatus)) {
       prompts.log.error('AudioMuse rejected the API token.');
       return { retry: 'token' };
     }
     prompts.log.error(
-      details?.reason === 'rejected'
-        ? `AudioMuse at ${settings.url} answered with HTTP ${details.httpStatus}. Check the address.`
-        : details?.reason === 'unreachable'
+      failure?.reason === 'rejected'
+        ? `AudioMuse at ${settings.url} answered with HTTP ${failure.httpStatus}. Check the address.`
+        : failure?.reason === 'unreachable'
           ? `Could not reach AudioMuse at ${settings.url}. Check the address and that AudioMuse is running.`
-          : `${settings.url} did not answer like AudioMuse. Check the address.`,
+          : // An invalid version response, or the time bound ran out.
+            `${settings.url} did not answer like AudioMuse. Check the address.`,
     );
     return { retry: 'url' };
   }

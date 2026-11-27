@@ -41,7 +41,19 @@ function playlistVisibility(
 const failureSchema = z.object({ error: z.object({ code: z.number() }).optional() });
 
 /** Why a Subsonic request failed, without any upstream text. */
-type Failure = { reason: 'unreachable' } | { reason: 'rejected'; subsonicCode?: number };
+export type Failure = { reason: 'unreachable' } | { reason: 'rejected'; subsonicCode?: number };
+
+/** Subsonic error codes a connection check distinguishes. */
+export const SubsonicError = { wrongCredentials: 40, tokenAuthUnsupported: 41 } as const;
+
+/** A failed connection check; `failure` is also the problem's details. */
+export class ConnectionFailed extends Problem {
+  readonly failure: Failure;
+  constructor(failure: Failure) {
+    super('navidrome_error', 'Navidrome connection check failed.', failure);
+    this.failure = failure;
+  }
+}
 class RequestFailure extends Error {
   readonly failure: Failure;
   constructor(failure: Failure) {
@@ -78,9 +90,9 @@ export class Navidrome {
   }
 
   /**
-   * Checks reachability and authentication. Failures are `navidrome_error`
-   * problems whose details say whether the server was unreachable or rejected
-   * the request (with the Subsonic error code, e.g. 40 for wrong credentials).
+   * Checks reachability and authentication. Failures are {@link ConnectionFailed}
+   * problems saying whether the server was unreachable or rejected the request
+   * (with the Subsonic error code, e.g. 40 for wrong credentials).
    */
   async verifyConnection(): Promise<{ type?: string; serverVersion?: string }> {
     let envelope: Record<string, unknown>;
@@ -89,7 +101,7 @@ export class Navidrome {
     } catch (error) {
       const failure: Failure =
         error instanceof RequestFailure ? error.failure : { reason: 'unreachable' };
-      throw new Problem('navidrome_error', 'Navidrome connection check failed.', failure);
+      throw new ConnectionFailed(failure);
     }
     const parsed = z
       .object({ type: z.string().optional(), serverVersion: z.string().optional() })
