@@ -11,14 +11,16 @@ CREATE TABLE calibrations (
   navidrome_url TEXT NOT NULL,
   release TEXT NOT NULL,
   release_minor TEXT NOT NULL,
-  epoch INTEGER NOT NULL,
+  -- The rating epoch used as evidence; NULL when a note was recorded instead.
+  epoch INTEGER,
   note TEXT,
   saved_at TEXT NOT NULL,
   reset_at TEXT
 );
 CREATE INDEX calibration_scale ON calibrations(scale, id);
--- The rating epoch new ratings join. Saving or resetting a scale starts a new epoch,
--- so recalibration collects fresh ratings and earlier epochs remain as history.
+-- The rating epoch new ratings join. Saving from ratings or resetting a saved scale
+-- starts a new epoch, so recalibration collects fresh ratings and earlier epochs
+-- remain as history. A save with a note leaves ratings in progress untouched.
 CREATE TABLE calibration_scales (
   scale TEXT PRIMARY KEY NOT NULL CHECK (scale IN ('similarity', 'description')),
   epoch INTEGER NOT NULL
@@ -28,11 +30,11 @@ CREATE TABLE calibration_ratings (
   scale TEXT NOT NULL CHECK (scale IN ('similarity', 'description')),
   epoch INTEGER NOT NULL,
   probe TEXT NOT NULL,
-  item_id TEXT NOT NULL,
+  track_id TEXT NOT NULL,
   title TEXT NOT NULL,
-  author TEXT NOT NULL,
+  artist TEXT NOT NULL,
   score REAL NOT NULL,
   rating TEXT NOT NULL CHECK (rating IN ('good', 'poor')),
   rated_at TEXT NOT NULL,
-  PRIMARY KEY (scale, epoch, probe, item_id)
+  PRIMARY KEY (scale, epoch, probe, track_id)
 );

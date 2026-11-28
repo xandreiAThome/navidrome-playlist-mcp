@@ -87,7 +87,7 @@ test('a proposal needs a poor rating to bound the cutoff', async (t) => {
   assert.deepEqual(proposal.needs, ['poor']);
 });
 
-const ids = (ratings: { itemId: string }[]) => ratings.map((r) => r.itemId);
+const ids = (ratings: { trackId: string }[]) => ratings.map((r) => r.trackId);
 
 test('the similarity cutoff is the largest good distance below the smallest poor distance', async (t) => {
   const { service } = await uncalibrated(t);
@@ -265,5 +265,69 @@ test('a saved calibration is bound to the live deployment', async (t) => {
     const status = await start(url).execute('check_audiomuse_connection', {});
     assert.equal(status.status, 'ok', JSON.stringify(status));
     assert.deepEqual(status.data!.calibration.similarity, expected);
+  }
+});
+
+test('a note save leaves ratings in progress counting toward the next proposal', async (t) => {
+  const { service } = await uncalibrated(t);
+  await rateSimilarity(service);
+  const saved = await service.execute('save_calibration', {
+    scale: 'similarity',
+    cutoff: 0.25,
+    evidence: 'note',
+    note: 'Measured by hand',
+  });
+  assert.equal(saved.status, 'ok', JSON.stringify(saved));
+  const proposal = await propose(service, 'similarity');
+  assert.equal(proposal.state, 'proposed', JSON.stringify(proposal));
+  assert.deepEqual([proposal.cutoff, proposal.probes], [0.2, 3]);
+  const replaced = await service.execute('save_calibration', {
+    scale: 'similarity',
+    cutoff: 0.2,
+    evidence: 'ratings',
+  });
+  assert.equal(replaced.status, 'ok', JSON.stringify(replaced));
+  assert.equal((await propose(service, 'similarity')).probes, 0);
+});
+
+test('resetting a never-saved scale leaves ratings in progress counting toward its proposal', async (t) => {
+  const { service } = await uncalibrated(t);
+  await rateSimilarity(service);
+  const reset = await service.execute('reset_calibration', { scale: 'similarity' });
+  assert.deepEqual(reset, { status: 'ok', data: { scale: 'similarity', state: 'missing' } });
+  const proposal = await propose(service, 'similarity');
+  assert.equal(proposal.state, 'proposed', JSON.stringify(proposal));
+  assert.equal(proposal.cutoff, 0.2);
+});
+
+test('both cutoffs from an old calibration file move onto their scales through note saves', async (t) => {
+  const { service, start } = await uncalibrated(t);
+  const file = { maxDistance: 0.25, minDescriptionSimilarity: 0.75 };
+  for (const [scale, cutoff] of [
+    ['similarity', file.maxDistance],
+    ['description', file.minDescriptionSimilarity],
+  ] as const) {
+    const saved = await service.execute('save_calibration', {
+      scale,
+      cutoff,
+      evidence: 'note',
+      note: 'Moved from the calibration file',
+    });
+    assert.equal(saved.status, 'ok', JSON.stringify(saved));
+  }
+  service.close();
+  const restarted = start();
+  const status = await restarted.execute('check_audiomuse_connection', {});
+  assert.deepEqual(status.data!.calibration, {
+    similarity: { state: 'calibrated', cutoff: 0.25 },
+    description: { state: 'calibrated', cutoff: 0.75 },
+  });
+  for (const [tool, input] of [
+    ['find_similar_tracks', { trackId: 'studio', count: 1 }],
+    ['discover_tracks', { description: 'quiet evening', count: 1 }],
+  ] as const) {
+    const found = await restarted.execute(tool, input);
+    assert.equal(found.status, 'ok', JSON.stringify(found));
+    assert.equal(found.data!.recommendations.length, 1);
   }
 });

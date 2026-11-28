@@ -1,4 +1,5 @@
 import { releaseMinor } from './release.ts';
+import { Problem } from '../playlists/domain.ts';
 import type {
   Calibration,
   CalibrationBinding,
@@ -30,16 +31,21 @@ export function calibrationChanges(
 }
 
 /**
+ * Per scale, whether score `a` is a closer match than `b`: a similarity score is a
+ * distance (lower is closer), a description score a similarity (higher is closer).
+ */
+const closerOn: Record<CalibrationScale, (a: number, b: number) => boolean> = {
+  similarity: (a, b) => a < b,
+  description: (a, b) => a > b,
+};
+const closer = (scale: CalibrationScale, a: number, b: number) => closerOn[scale](a, b);
+
+/**
  * Whether a score meets a scale's quality cutoff. Both cutoffs are inclusive: a
  * similarity cutoff is a maximum distance, a description cutoff a minimum similarity.
  */
-export function meetsCutoff(scale: CalibrationScale, score: number, cutoff: number) {
-  return scale === 'similarity' ? score <= cutoff : score >= cutoff;
-}
-
-/** Whether score `a` is a closer match than `b` on the scale. */
-const closer = (scale: CalibrationScale, a: number, b: number) =>
-  scale === 'similarity' ? a < b : a > b;
+export const meetsCutoff = (scale: CalibrationScale, score: number, cutoff: number) =>
+  !closer(scale, cutoff, score);
 
 const needMessages: Record<CalibrationNeed, string> = {
   probes: 'ratings from at least three probes',
@@ -82,7 +88,7 @@ export function proposeCutoff(
     };
   const cutoff = separated.reduce((a, b) => (closer(scale, a, b) ? b : a));
   const ordered = [...ratings].sort((a, b) =>
-    scale === 'similarity' ? a.score - b.score : b.score - a.score,
+    closer(scale, a.score, b.score) ? -1 : closer(scale, b.score, a.score) ? 1 : 0,
   );
   return {
     ...evidence,
@@ -91,4 +97,25 @@ export function proposeCutoff(
     accepted: ordered.filter((r) => meetsCutoff(scale, r.score, cutoff)),
     rejected: ordered.filter((r) => !meetsCutoff(scale, r.score, cutoff)),
   };
+}
+
+/** Refuses a cutoff that is not the one currently proposed from the ratings. */
+export function checkProposal(
+  scale: CalibrationScale,
+  cutoff: number,
+  ratings: CalibrationRating[],
+) {
+  const proposal = proposeCutoff(scale, ratings);
+  if (proposal.state !== 'proposed' || proposal.cutoff !== cutoff)
+    throw new Problem(
+      'invalid_input',
+      'Save only the cutoff currently proposed from the ratings; propose again and show the user its accepted and rejected candidates.',
+      {
+        scale,
+        proposal:
+          proposal.state === 'proposed'
+            ? { state: proposal.state, cutoff: proposal.cutoff }
+            : { state: proposal.state, needs: proposal.needs },
+      },
+    );
 }

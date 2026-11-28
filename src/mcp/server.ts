@@ -81,7 +81,7 @@ const tools: { name: ToolName; readOnly: boolean; description: string }[] = [
     name: 'reset_calibration',
     readOnly: false,
     description:
-      'Mark one scale’s calibration stale after an AudioMuse model or index change that cannot be detected, so recommendations on that scale report calibration_required until it is recalibrated. Starts fresh calibration ratings; earlier ratings and calibrations are kept as history. Only reset when the user reports such a change.',
+      'Mark one scale’s calibration stale after an AudioMuse model or index change that cannot be detected, so recommendations on that scale report calibration_required until it is recalibrated. Starts fresh calibration ratings when a calibration was saved; earlier ratings and calibrations are kept as history. Only reset when the user reports such a change.',
   },
   {
     name: 'collect_calibration_candidates',
@@ -93,7 +93,7 @@ const tools: { name: ToolName; readOnly: boolean; description: string }[] = [
     name: 'record_calibration_ratings',
     readOnly: false,
     description:
-      "Record the user's good or poor calibration ratings for one probe, echoing each candidate's trackId, title, artist, and score as collected. Ratings are trusted as the user's own judgment; record only what the user said after listening. Re-rating a candidate replaces its rating. Returns the scale's ratings collected toward the next calibration. Local only.",
+      "Record the user's good or poor calibration ratings for one probe, echoing each candidate's trackId, title, artist, and score as collected. Ratings are trusted as the user's own judgment; record only what the user said after listening. Re-rating a candidate replaces its rating. Returns the scale's ratings collected toward the next calibration, in the same trackId, title, and artist terms. Local only.",
   },
   {
     name: 'propose_calibration',
@@ -105,7 +105,7 @@ const tools: { name: ToolName; readOnly: boolean; description: string }[] = [
     name: 'save_calibration',
     readOnly: false,
     description:
-      'Save a quality cutoff for one scale, bound to the live AudioMuse URL, selected server, Navidrome URL, and release. With evidence "ratings", save exactly the cutoff propose_calibration returned after the user agreed; it is rejected if the proposal changed. With evidence "note", save an explicit cutoff without ratings, such as one moved from an old calibration file, recording where it came from in note. Later ratings start fresh. Afterwards, suggest (do not require) testing recommendations for a probe the user has not rated.',
+      'Save a quality cutoff for one scale, bound to the live AudioMuse URL, selected server, Navidrome URL, and release. With evidence "ratings", save exactly the cutoff propose_calibration returned after the user agreed; it is rejected if the proposal changed. With evidence "note", save an explicit cutoff without ratings, such as one moved from an old calibration file, recording where it came from in note. Saving from ratings starts fresh ratings; a note leaves ratings in progress counting toward the next proposal. Afterwards, suggest (do not require) testing recommendations for a probe the user has not rated.',
   },
   {
     name: 'discover_tracks',

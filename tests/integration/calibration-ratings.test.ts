@@ -151,17 +151,17 @@ test('records good and poor ratings per scale as evidence, a re-rating replacing
     ratings: [
       {
         probe: 'studio',
-        itemId: 'live',
+        trackId: 'live',
         title: 'Hallelujah (Live)',
-        author: 'Jeff Buckley',
+        artist: 'Jeff Buckley',
         score: 0.15,
         rating: 'poor',
       },
       {
         probe: 'studio',
-        itemId: 'other',
+        trackId: 'other',
         title: 'Teardrop',
-        author: 'Massive Attack',
+        artist: 'Massive Attack',
         score: 0.4,
         rating: 'poor',
       },

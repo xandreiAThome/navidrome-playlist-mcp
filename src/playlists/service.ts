@@ -48,18 +48,7 @@ export class PlaylistService {
       check_audiomuse_connection: () => discovery.status(),
       reset_calibration: ({ scale }) => discovery.reset(scale),
       collect_calibration_candidates: (value) => discovery.collect(value),
-      record_calibration_ratings: ({ scale, probe, ratings }) => {
-        storage.recordCalibrationRatings(
-          scale,
-          ratings.map(({ trackId, artist, ...rest }) => ({
-            probe,
-            itemId: trackId,
-            author: artist,
-            ...rest,
-          })),
-        );
-        return { scale, ratings: storage.calibrationRatings(scale) };
-      },
+      record_calibration_ratings: (value) => discovery.record(value),
       propose_calibration: ({ scale }) => discovery.propose(scale),
       save_calibration: (value) => discovery.save(value),
       check_connection: () => navidrome.ping(),

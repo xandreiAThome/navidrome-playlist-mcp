@@ -4,6 +4,7 @@ import { Storage } from '../../src/database/storage.ts';
 import { navidromeFixture } from '../support/navidrome.ts';
 import { audioMuseFixture } from '../support/audiomuse.ts';
 import { createApp } from '../../src/app.ts';
+import { Problem } from '../../src/playlists/domain.ts';
 import type { CalibrationBinding, CalibrationScale } from '../../src/playlists/domain.ts';
 
 /** A Navidrome and AudioMuse pair with AudioMuse configured but not yet calibrated. */
@@ -174,9 +175,9 @@ test('resetting a scale makes it stale until recalibrated, keeping its ratings a
   storage.recordCalibrationRatings('description', [
     {
       probe: 'rainy day',
-      itemId: 'other',
+      trackId: 'other',
       title: 'Teardrop',
-      author: 'Massive Attack',
+      artist: 'Massive Attack',
       score: 0.8,
       rating: 'good',
     },
@@ -265,11 +266,11 @@ test('a saved calibration is current for its scale only and persists across rest
   );
 });
 
-const rating = (probe: string, itemId: string, score: number, verdict: 'good' | 'poor') => ({
+const rating = (probe: string, trackId: string, score: number, verdict: 'good' | 'poor') => ({
   probe,
-  itemId,
-  title: `Title ${itemId}`,
-  author: 'Artist',
+  trackId,
+  title: `Title ${trackId}`,
+  artist: 'Artist',
   score,
   rating: verdict,
 });
@@ -323,4 +324,67 @@ test('a reset marks only that scale stale and starts fresh ratings', async (t) =
   const fresh = storage.saveCalibration({ scale: 'similarity', cutoff: 0.2, binding });
   assert.equal(fresh.resetAt, undefined);
   assert.equal(storage.calibrationHistory('similarity')[1]?.resetAt, reset.resetAt);
+});
+
+test('calibration belongs to the persisted identity: another account or server cannot open it', async (t) => {
+  const { seed, start, config } = await discoveryFixture(t);
+  seed([{ scale: 'similarity', cutoff: 0.3 }]);
+  for (const other of [
+    { ...config, username: 'someone-else' },
+    { ...config, url: 'http://other-navidrome.test' },
+  ])
+    assert.throws(
+      () => createApp(other),
+      (error: unknown) => error instanceof Problem && error.code === 'configuration_error',
+    );
+  assert.equal((await start().execute('find_similar_tracks', similar)).status, 'ok');
+});
+
+test('a calibration with a malformed release is refused as a problem', async (t) => {
+  const remote = await navidromeFixture();
+  t.onTestFinished(() => remote.close());
+  const storage = new Storage(remote.config);
+  t.onTestFinished(() => storage.close());
+  assert.throws(
+    () =>
+      storage.saveCalibration({
+        scale: 'similarity',
+        cutoff: 0.3,
+        binding: { ...binding, release: 'nightly' },
+      }),
+    (error: unknown) => error instanceof Problem && error.code === 'audiomuse_error',
+  );
+  assert.equal(storage.currentCalibration('similarity'), undefined);
+});
+
+test('a ratings save checks its evidence inside the save transaction, saving nothing when refused', async (t) => {
+  const remote = await navidromeFixture();
+  t.onTestFinished(() => remote.close());
+  const storage = new Storage(remote.config);
+  t.onTestFinished(() => storage.close());
+  storage.recordCalibrationRatings('similarity', [rating('studio', 'a', 0.1, 'good')]);
+  // Another client sharing the database records a rating before this save.
+  const other = new Storage(remote.config);
+  other.recordCalibrationRatings('similarity', [rating('studio', 'b', 0.5, 'poor')]);
+  other.close();
+  let evidence: unknown;
+  assert.throws(
+    () =>
+      storage.saveCalibration({
+        scale: 'similarity',
+        cutoff: 0.1,
+        binding,
+        verify: (ratings) => {
+          evidence = ratings;
+          throw new Problem('invalid_input', 'The proposal changed.');
+        },
+      }),
+    Problem,
+  );
+  assert.deepEqual(evidence, [
+    rating('studio', 'a', 0.1, 'good'),
+    rating('studio', 'b', 0.5, 'poor'),
+  ]);
+  assert.equal(storage.currentCalibration('similarity'), undefined);
+  assert.equal(storage.calibrationRatings('similarity').length, 2);
 });

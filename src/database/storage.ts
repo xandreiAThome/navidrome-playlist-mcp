@@ -60,7 +60,7 @@ function calibrationValue(row: typeof calibrations.$inferSelect): Calibration {
       release: row.release,
       minor: row.releaseMinor,
     },
-    epoch: row.epoch,
+    ...(row.epoch === null ? {} : { epoch: row.epoch }),
     savedAt: row.savedAt,
     ...(row.note === null ? {} : { note: row.note }),
     ...(row.resetAt === null ? {} : { resetAt: row.resetAt }),
@@ -137,19 +137,28 @@ export class Storage {
   }
 
   /**
-   * Saves a quality cutoff as the scale's current calibration. The current rating
-   * epoch becomes its evidence and later ratings start a new epoch.
+   * Saves a quality cutoff as the scale's current calibration. Without a note, the
+   * current rating epoch becomes its evidence: `verify` checks those ratings in the
+   * same transaction, so a concurrent rating cannot change them before the save, and
+   * later ratings start a new epoch. A note is recorded instead of ratings and leaves
+   * ratings in progress counting toward the next calibration.
    */
-  saveCalibration(input: {
-    scale: CalibrationScale;
-    cutoff: number;
-    binding: CalibrationBinding;
-    note?: string;
-  }): Calibration {
+  saveCalibration(
+    input: { scale: CalibrationScale; cutoff: number; binding: CalibrationBinding } & (
+      { note: string } | { verify?: (ratings: CalibrationRating[]) => void }
+    ),
+  ): Calibration {
     const minor = releaseMinor(input.binding.release);
-    if (!minor) throw new Error(`Invalid AudioMuse release ${input.binding.release}.`);
+    if (!minor)
+      throw new Problem('audiomuse_error', 'AudioMuse reported a malformed release.', {
+        release: input.binding.release,
+      });
     return this.transaction(() => {
-      const epoch = this.ratingEpoch(input.scale);
+      let epoch: number | null = null;
+      if (!('note' in input)) {
+        epoch = this.ratingEpoch(input.scale);
+        input.verify?.(this.calibrationRatings(input.scale, epoch));
+      }
       const row = this.db
         .insert(calibrations)
         .values({
@@ -161,26 +170,26 @@ export class Storage {
           release: input.binding.release,
           releaseMinor: minor,
           epoch,
-          note: input.note ?? null,
+          note: 'note' in input ? input.note : null,
           savedAt: new Date().toISOString(),
         })
         .returning()
         .get();
-      this.advanceRatingEpoch(input.scale, epoch);
+      if (epoch !== null) this.advanceRatingEpoch(input.scale, epoch);
       return calibrationValue(row);
     });
   }
 
   /**
    * Marks the scale's current calibration stale after an undetectable model or
-   * index change and starts fresh ratings. Returns undefined when none was saved.
+   * index change and starts fresh ratings. Returns undefined when none was saved,
+   * leaving ratings in progress counting toward the scale's first calibration.
    */
   resetCalibration(scale: CalibrationScale): Calibration | undefined {
     return this.transaction(() => {
       const current = this.currentCalibration(scale);
+      if (!current || current.resetAt) return current;
       this.advanceRatingEpoch(scale, this.ratingEpoch(scale));
-      if (!current) return undefined;
-      if (current.resetAt) return current;
       const resetAt = new Date().toISOString();
       this.db.update(calibrations).set({ resetAt }).where(eq(calibrations.id, current.id)).run();
       return { ...current, resetAt };
@@ -201,11 +210,11 @@ export class Storage {
               calibrationRatings.scale,
               calibrationRatings.epoch,
               calibrationRatings.probe,
-              calibrationRatings.itemId,
+              calibrationRatings.trackId,
             ],
             set: {
               title: rating.title,
-              author: rating.author,
+              artist: rating.artist,
               score: rating.score,
               rating: rating.rating,
               ratedAt,
@@ -223,9 +232,9 @@ export class Storage {
     return this.db
       .select({
         probe: calibrationRatings.probe,
-        itemId: calibrationRatings.itemId,
+        trackId: calibrationRatings.trackId,
         title: calibrationRatings.title,
-        author: calibrationRatings.author,
+        artist: calibrationRatings.artist,
         score: calibrationRatings.score,
         rating: calibrationRatings.rating,
       })

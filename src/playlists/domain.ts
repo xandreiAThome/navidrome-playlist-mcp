@@ -35,9 +35,11 @@ export type Config = {
   searchPageSize: number;
   searchMaxPages: number;
 };
+export const calibrationScaleSchema = z.enum(['similarity', 'description']);
 /** A recommendation scale, calibrated, saved, and reset independently. */
-export type CalibrationScale = 'similarity' | 'description';
-export type CalibrationVerdict = 'good' | 'poor';
+export type CalibrationScale = z.infer<typeof calibrationScaleSchema>;
+export const calibrationVerdictSchema = z.enum(['good', 'poor']);
+export type CalibrationVerdict = z.infer<typeof calibrationVerdictSchema>;
 /** What a calibration was measured against; a change to any field makes it stale. */
 export type CalibrationBinding = {
   audiomuseUrl: string;
@@ -53,8 +55,8 @@ export type Calibration = {
   /** Similarity: the maximum distance. Description: the minimum similarity. */
   cutoff: number;
   binding: CalibrationBinding & { minor: string };
-  /** The rating epoch whose ratings are this calibration's evidence. */
-  epoch: number;
+  /** The rating epoch whose ratings are this calibration's evidence; absent for a note. */
+  epoch?: number;
   savedAt: string;
   /** Recorded instead of ratings, e.g. for cutoffs moved from a calibration file. */
   note?: string;
@@ -74,9 +76,9 @@ export type CalibrationNeed = 'probes' | 'good' | 'poor' | 'separation';
 export type CalibrationRating = {
   /** A library track ID (similarity) or listening description (description). */
   probe: string;
-  itemId: string;
+  trackId: string;
   title: string;
-  author: string;
+  artist: string;
   /** The candidate's distance (similarity) or similarity (description). */
   score: number;
   rating: CalibrationVerdict;
@@ -359,7 +361,6 @@ export type UpdatePreview = {
   resultingTrackIds: string[];
   repeatedTrackIds: string[];
 };
-const calibrationScaleSchema = z.enum(['similarity', 'description']);
 /** A calibration probe's candidate with its raw distance (similarity) or similarity (description). */
 export type CalibrationCandidate = { track: Track; score: number };
 export const toolSchemas = {
@@ -389,7 +390,7 @@ export const toolSchemas = {
     .object({ description: text, count: z.number().int().min(1).max(100).default(20) })
     .strict(),
   check_audiomuse_connection: z.object({}).strict(),
-  reset_calibration: z.object({ scale: z.enum(['similarity', 'description']) }).strict(),
+  reset_calibration: z.object({ scale: calibrationScaleSchema }).strict(),
   collect_calibration_candidates: z
     .object({
       scale: calibrationScaleSchema,
@@ -410,7 +411,7 @@ export const toolSchemas = {
               title: text,
               artist: text,
               score: z.number().finite(),
-              rating: z.enum(['good', 'poor']),
+              rating: calibrationVerdictSchema,
             })
             .strict(),
         )
