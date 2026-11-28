@@ -357,6 +357,9 @@ export type UpdatePreview = {
   resultingTrackIds: string[];
   repeatedTrackIds: string[];
 };
+const calibrationScaleSchema = z.enum(['similarity', 'description']);
+/** A calibration probe's candidate with its raw distance (similarity) or similarity (description). */
+export type CalibrationCandidate = { track: Track; score: number };
 export const toolSchemas = {
   save_playlist_update: saveUpdateSchema,
   get_playlist_update: getDraftSchema,
@@ -384,6 +387,34 @@ export const toolSchemas = {
     .object({ description: text, count: z.number().int().min(1).max(100).default(20) })
     .strict(),
   check_audiomuse_connection: z.object({}).strict(),
+  collect_calibration_candidates: z
+    .object({
+      scale: calibrationScaleSchema,
+      probe: text,
+      offset: z.number().int().min(0).max(199).default(0),
+      count: z.number().int().min(1).max(50).default(10),
+    })
+    .strict(),
+  record_calibration_ratings: z
+    .object({
+      scale: calibrationScaleSchema,
+      probe: text,
+      ratings: z
+        .array(
+          z
+            .object({
+              trackId: text,
+              title: text,
+              artist: text,
+              score: z.number().finite(),
+              rating: z.enum(['good', 'poor']),
+            })
+            .strict(),
+        )
+        .min(1)
+        .max(200),
+    })
+    .strict(),
   check_connection: z.object({}).strict(),
   search_tracks: z.object({ query: text }).strict(),
   resolve_tracks: z.object({ songs: z.array(requestedSongSchema).min(1).max(500) }).strict(),
@@ -440,6 +471,15 @@ export type ToolData = {
   find_similar_tracks: DiscoveryResult;
   discover_tracks: DiscoveryResult;
   check_audiomuse_connection: { connected: boolean; version: string; calibrated: boolean };
+  collect_calibration_candidates: {
+    scale: CalibrationScale;
+    probe: string;
+    offset: number;
+    candidates: CalibrationCandidate[];
+    /** Present when AudioMuse may have more candidates further down the list. */
+    nextOffset?: number;
+  };
+  record_calibration_ratings: { scale: CalibrationScale; ratings: CalibrationRating[] };
   check_connection: { connected: boolean };
   search_tracks: { tracks: Track[]; complete: boolean };
   resolve_tracks: { resolutions: Resolution[] };

@@ -181,14 +181,16 @@ appends to an existing one. Recovery tools can also complete remote writes.
 | `get_update_operation`      | Inspect an append's outcome and compare playlist states.      |
 | `reconcile_playlist_update` | Resolve an uncertain append after external investigation.     |
 
-| Recommendation tool            | Purpose                                                         |
-| ------------------------------ | --------------------------------------------------------------- |
-| `check_audiomuse_connection`   | Check AudioMuse connectivity and calibration configuration.     |
-| `discover_tracks`              | Find library tracks from a listening description.               |
-| `find_similar_tracks`          | Find tracks similar to one library recording.                   |
-| `configure_playlist_discovery` | Choose a draft's reference tracks and retained recommendations. |
-| `expand_playlist_draft`        | Add recommendations to a resolved new-playlist draft.           |
-| `expand_playlist_update`       | Recommend additions using an update's reference songs.          |
+| Recommendation tool              | Purpose                                                         |
+| -------------------------------- | --------------------------------------------------------------- |
+| `check_audiomuse_connection`     | Check AudioMuse connectivity and calibration configuration.     |
+| `discover_tracks`                | Find library tracks from a listening description.               |
+| `find_similar_tracks`            | Find tracks similar to one library recording.                   |
+| `configure_playlist_discovery`   | Choose a draft's reference tracks and retained recommendations. |
+| `expand_playlist_draft`          | Add recommendations to a resolved new-playlist draft.           |
+| `expand_playlist_update`         | Recommend additions using an update's reference songs.          |
+| `collect_calibration_candidates` | Collect candidates with raw scores for a calibration probe.     |
+| `record_calibration_ratings`     | Record good or poor ratings of calibration candidates.          |
 
 Discovery and recommendation generation require the optional AudioMuse setup
 described above. Reference and retention choices are saved locally.

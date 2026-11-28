@@ -78,6 +78,18 @@ const tools: { name: ToolName; readOnly: boolean; description: string }[] = [
       'Check optional AudioMuse authentication, version, and calibration configuration. Does not analyze the library.',
   },
   {
+    name: 'collect_calibration_candidates',
+    readOnly: true,
+    description:
+      'Collect candidates for a calibration probe: a library track ID (similarity scale) or a listening description (description scale). Works before calibration and returns raw scores (distance, lower is closer; similarity, higher is closer) with no quality cutoff, each validated against the library. Have the user listen in Navidrome and rate each candidate good or poor. When evidence is short, such as no poor rating yet, use nextOffset to collect further down the list or try another probe.',
+  },
+  {
+    name: 'record_calibration_ratings',
+    readOnly: false,
+    description:
+      "Record the user's good or poor calibration ratings for one probe, echoing each candidate's trackId, title, artist, and score as collected. Ratings are trusted as the user's own judgment; record only what the user said after listening. Re-rating a candidate replaces its rating. Returns the scale's ratings collected toward the next calibration. Local only.",
+  },
+  {
     name: 'discover_tracks',
     readOnly: true,
     description:
@@ -171,12 +183,14 @@ export function createMcpServer(service: PlaylistService): McpServer {
               'publish_playlist',
               'reconcile_operation',
               'expand_playlist_draft',
+              'record_calibration_ratings',
             ].includes(tool.name),
           openWorldHint: ![
             'get_playlist_draft',
             'get_operation',
             'copy_playlist_draft',
             'preview_playlist',
+            'record_calibration_ratings',
           ].includes(tool.name),
         },
       },

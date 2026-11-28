@@ -10,6 +10,7 @@ import type {
   ToolInput,
   ExpansionResult,
   Draft,
+  ToolData,
   CalibrationScale,
 } from '../playlists/domain.ts';
 import type { Navidrome } from '../navidrome/client.ts';
@@ -46,6 +47,16 @@ export class Discovery {
     private readonly navidromeUrl: string,
   ) {}
 
+  /** Checks the supported release and selected server under one discovery deadline. */
+  private async connect() {
+    if (!this.config)
+      throw new Problem('audiomuse_unavailable', 'Configure AudioMuse to use discovery.');
+    const signal = AbortSignal.timeout(this.config.budgetMs);
+    const release = await this.audiomuse.supportedVersion(signal);
+    await this.audiomuse.verifyServer(signal);
+    return { signal, release };
+  }
+
   /**
    * Checks the deployment and returns the scale's quality cutoff, or reports
    * `calibration_required` when the scale is missing or stale.
@@ -67,9 +78,7 @@ export class Discovery {
         `Calibrate the ${scale} scale before using it for recommendations.`,
         { scale, reason: 'missing' },
       );
-    const signal = AbortSignal.timeout(this.config.budgetMs);
-    const release = await this.audiomuse.supportedVersion(signal);
-    await this.audiomuse.verifyServer(signal);
+    const { signal, release } = await this.connect();
     if ('binding' in calibration) {
       const changes = calibrationChanges(calibration, {
         audiomuseUrl: this.config.url,
@@ -452,6 +461,29 @@ export class Discovery {
 
   async describe(description: string, count: number): Promise<DiscoveryResult> {
     const { signal, cutoff } = await this.start('description');
+    const results = await this.search(description, signal);
+    const recommendations: RecommendedTrack[] = [];
+    const seen = new Set<string>();
+    for (const row of results) {
+      if (row.similarity < cutoff || seen.has(row.item_id)) continue;
+      recommendations.push(await this.validate(row, signal, 'description'));
+      seen.add(row.item_id);
+      if (recommendations.length === count) break;
+    }
+    return {
+      recommendations,
+      target: count,
+      shortfall: count - recommendations.length,
+      candidateLimitReached: results.length === 200,
+      warnings: [],
+    };
+  }
+
+  /** Description-search rows for a listening description, most similar first. */
+  private async search(
+    description: string,
+    signal: AbortSignal,
+  ): Promise<(Row & { similarity: number })[]> {
     const body = await this.audiomuse.request('/api/clap/search', signal, {
       query: description,
       limit: 200,
@@ -464,20 +496,41 @@ export class Discovery {
         'audiomuse_error',
         'AudioMuse returned invalid description-search results.',
       );
-    const recommendations: RecommendedTrack[] = [];
+    return parsed.data.results.sort((a, b) => b.similarity - a.similarity);
+  }
+
+  /**
+   * Collects one page of a calibration probe's candidates with raw scores, before
+   * any quality cutoff applies. Each candidate is validated against the library.
+   */
+  async collect(
+    input: ToolInput<'collect_calibration_candidates'>,
+  ): Promise<ToolData['collect_calibration_candidates']> {
+    const { scale, probe, offset, count } = input;
+    const { signal } = await this.connect();
+    const end = Math.min(200, offset + count);
+    let rows: Row[];
+    if (scale === 'similarity') {
+      const track = await this.navidrome.getSong(probe, signal);
+      // Two extra rows allow for AudioMuse returning the probe itself and show
+      // whether the list continues past this page.
+      rows = (await this.neighbors(track, Math.min(200, end + 2), signal)).filter(
+        (row) => row.item_id !== probe,
+      );
+    } else rows = await this.search(probe, signal);
     const seen = new Set<string>();
-    for (const row of parsed.data.results.sort((a, b) => b.similarity - a.similarity)) {
-      if (row.similarity < cutoff || seen.has(row.item_id)) continue;
-      recommendations.push(await this.validate(row, signal, 'description'));
-      seen.add(row.item_id);
-      if (recommendations.length === count) break;
+    rows = rows.filter((row) => !seen.has(row.item_id) && seen.add(row.item_id));
+    const candidates = [];
+    for (const row of rows.slice(offset, end)) {
+      const { track, recommendation } = await this.validate(row, signal, scale);
+      candidates.push({ track, score: recommendation.score });
     }
     return {
-      recommendations,
-      target: count,
-      shortfall: count - recommendations.length,
-      candidateLimitReached: parsed.data.results.length === 200,
-      warnings: [],
+      scale,
+      probe,
+      offset,
+      candidates,
+      ...(rows.length > end && end < 200 ? { nextOffset: end } : {}),
     };
   }
 }
