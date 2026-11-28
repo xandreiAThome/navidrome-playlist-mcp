@@ -68,6 +68,13 @@ export type Calibration = {
   /** Set when the user reset the scale after an undetectable model or index change. */
   resetAt?: string;
 };
+/** Why a stored calibration no longer applies: a changed bound field, or a reset. */
+export type CalibrationChange = keyof CalibrationBinding | 'reset';
+/** A scale's calibration against the live deployment. */
+export type CalibrationStatus =
+  | { state: 'missing' }
+  | { state: 'calibrated'; cutoff: number }
+  | { state: 'stale'; cutoff: number; changes: CalibrationChange[] };
 /** One candidate for a calibration probe, rated good or poor by the user. */
 export type CalibrationRating = {
   /** A library track ID (similarity) or listening description (description). */
@@ -384,6 +391,7 @@ export const toolSchemas = {
     .object({ description: text, count: z.number().int().min(1).max(100).default(20) })
     .strict(),
   check_audiomuse_connection: z.object({}).strict(),
+  reset_calibration: z.object({ scale: z.enum(['similarity', 'description']) }).strict(),
   check_connection: z.object({}).strict(),
   search_tracks: z.object({ query: text }).strict(),
   resolve_tracks: z.object({ songs: z.array(requestedSongSchema).min(1).max(500) }).strict(),
@@ -439,7 +447,14 @@ export type ToolData = {
   expand_playlist_draft: ExpansionResult;
   find_similar_tracks: DiscoveryResult;
   discover_tracks: DiscoveryResult;
-  check_audiomuse_connection: { connected: boolean; version: string; calibrated: boolean };
+  check_audiomuse_connection: {
+    connected: boolean;
+    version: string;
+    calibration: Record<CalibrationScale, CalibrationStatus>;
+  };
+  reset_calibration:
+    | { scale: CalibrationScale; state: 'missing' }
+    | { scale: CalibrationScale; state: 'stale'; cutoff: number; resetAt: string };
   check_connection: { connected: boolean };
   search_tracks: { tracks: Track[]; complete: boolean };
   resolve_tracks: { resolutions: Resolution[] };

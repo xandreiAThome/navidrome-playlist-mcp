@@ -1,8 +1,5 @@
 import { releaseMinor } from './release.ts';
-import type { Calibration, CalibrationBinding } from '../playlists/domain.ts';
-
-/** Why a stored calibration no longer applies: a changed bound field, or a reset. */
-export type CalibrationChange = keyof CalibrationBinding | 'reset';
+import type { Calibration, CalibrationBinding, CalibrationChange } from '../playlists/domain.ts';
 
 const baseUrl = (url: string) => url.replace(/\/$/, '');
 

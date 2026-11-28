@@ -41,6 +41,7 @@ test('a local MCP client discovers tools and completes a previewed playlist work
       'reconcile_playlist_update',
       'check_connection',
       'check_audiomuse_connection',
+      'reset_calibration',
       'discover_tracks',
       'find_similar_tracks',
       'expand_playlist_draft',

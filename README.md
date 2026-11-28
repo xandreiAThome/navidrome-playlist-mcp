@@ -183,7 +183,8 @@ appends to an existing one. Recovery tools can also complete remote writes.
 
 | Recommendation tool            | Purpose                                                         |
 | ------------------------------ | --------------------------------------------------------------- |
-| `check_audiomuse_connection`   | Check AudioMuse connectivity and calibration configuration.     |
+| `check_audiomuse_connection`   | Check AudioMuse connectivity and each scale's calibration.      |
+| `reset_calibration`            | Mark a scale stale after an AudioMuse model or index change.    |
 | `discover_tracks`              | Find library tracks from a listening description.               |
 | `find_similar_tracks`          | Find tracks similar to one library recording.                   |
 | `configure_playlist_discovery` | Choose a draft's reference tracks and retained recommendations. |

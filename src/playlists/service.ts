@@ -45,7 +45,8 @@ export class PlaylistService {
       find_similar_tracks: ({ trackId, count, allowAlternateVersions }) =>
         discovery.similar(trackId, count, allowAlternateVersions),
       discover_tracks: ({ description, count }) => discovery.describe(description, count),
-      check_audiomuse_connection: () => audiomuse.checkConnection(),
+      check_audiomuse_connection: () => discovery.status(),
+      reset_calibration: ({ scale }) => discovery.reset(scale),
       check_connection: () => navidrome.ping(),
       search_tracks: ({ query }) => navidrome.search(query),
       resolve_tracks: async ({ songs }) => {

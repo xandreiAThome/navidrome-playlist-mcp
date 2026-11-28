@@ -11,6 +11,8 @@ import type {
   ExpansionResult,
   Draft,
   CalibrationScale,
+  CalibrationStatus,
+  ToolData,
 } from '../playlists/domain.ts';
 import type { Navidrome } from '../navidrome/client.ts';
 import type { AudioMuse } from './audiomuse.ts';
@@ -53,15 +55,7 @@ export class Discovery {
   private async start(scale: CalibrationScale) {
     if (!this.config)
       throw new Problem('audiomuse_unavailable', 'Configure AudioMuse to use discovery.');
-    const file = this.config.calibration;
-    // The calibration file applies only until the scale is saved in storage; config
-    // loading already checked it against the supported minor.
-    const calibration =
-      this.storage.currentCalibration(scale) ??
-      (file && {
-        cutoff: scale === 'similarity' ? file.maxDistance : file.minDescriptionSimilarity,
-      });
-    if (!calibration)
+    if (!this.calibration(scale))
       throw new Problem(
         'calibration_required',
         `Calibrate the ${scale} scale before using it for recommendations.`,
@@ -70,21 +64,72 @@ export class Discovery {
     const signal = AbortSignal.timeout(this.config.budgetMs);
     const release = await this.audiomuse.supportedVersion(signal);
     await this.audiomuse.verifyServer(signal);
-    if ('binding' in calibration) {
-      const changes = calibrationChanges(calibration, {
-        audiomuseUrl: this.config.url,
-        server: this.config.server,
-        navidromeUrl: this.navidromeUrl,
-        release,
-      });
-      if (changes.length)
-        throw new Problem(
-          'calibration_required',
-          `The ${scale} calibration is stale for this deployment; recalibrate the ${scale} scale.`,
-          { scale, reason: 'stale', changes },
-        );
-    }
-    return { signal, cutoff: calibration.cutoff };
+    const status = this.calibrationStatus(scale, release);
+    if (status.state === 'stale')
+      throw new Problem(
+        'calibration_required',
+        `The ${scale} calibration is stale for this deployment; recalibrate the ${scale} scale.`,
+        { scale, reason: 'stale', changes: status.changes },
+      );
+    if (status.state === 'missing')
+      throw new Problem(
+        'calibration_required',
+        `Calibrate the ${scale} scale before using it for recommendations.`,
+        { scale, reason: 'missing' },
+      );
+    return { signal, cutoff: status.cutoff };
+  }
+
+  /**
+   * The scale's stored calibration, else its cutoff from the calibration file, which
+   * applies only until the scale is saved in storage; config loading already checked
+   * the file against the supported minor.
+   */
+  private calibration(scale: CalibrationScale) {
+    const file = this.config?.calibration;
+    return (
+      this.storage.currentCalibration(scale) ??
+      (file && {
+        cutoff: scale === 'similarity' ? file.maxDistance : file.minDescriptionSimilarity,
+      })
+    );
+  }
+
+  private calibrationStatus(scale: CalibrationScale, release: string): CalibrationStatus {
+    const calibration = this.calibration(scale);
+    if (!calibration || !this.config) return { state: 'missing' };
+    if (!('binding' in calibration)) return { state: 'calibrated', cutoff: calibration.cutoff };
+    const changes = calibrationChanges(calibration, {
+      audiomuseUrl: this.config.url,
+      server: this.config.server,
+      navidromeUrl: this.navidromeUrl,
+      release,
+    });
+    return changes.length
+      ? { state: 'stale', cutoff: calibration.cutoff, changes }
+      : { state: 'calibrated', cutoff: calibration.cutoff };
+  }
+
+  /** The deployment's connection and each scale's calibration status. */
+  async status(): Promise<ToolData['check_audiomuse_connection']> {
+    const connection = await this.audiomuse.checkConnection();
+    return {
+      ...connection,
+      calibration: {
+        similarity: this.calibrationStatus('similarity', connection.version),
+        description: this.calibrationStatus('description', connection.version),
+      },
+    };
+  }
+
+  /**
+   * Marks the scale's calibration stale after a model or index change AudioMuse
+   * does not report, and starts fresh calibration ratings; earlier ones stay as history.
+   */
+  reset(scale: CalibrationScale): ToolData['reset_calibration'] {
+    const calibration = this.storage.resetCalibration(scale);
+    if (!calibration?.resetAt) return { scale, state: 'missing' };
+    return { scale, state: 'stale', cutoff: calibration.cutoff, resetAt: calibration.resetAt };
   }
 
   private async validate(

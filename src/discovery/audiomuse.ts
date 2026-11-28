@@ -103,12 +103,7 @@ export class AudioMuse {
     const signal = AbortSignal.timeout(config.budgetMs);
     const version = await this.supportedVersion(signal);
     await this.verifyServer(signal);
-    return {
-      connected: true,
-      version,
-      // Both the loaded calibration and this deployment are the supported minor release.
-      calibrated: Boolean(config.calibration),
-    };
+    return { connected: true, version };
   }
 
   /** The deployment's release, rejected unless it is a supported minor release. */

@@ -69,13 +69,19 @@ const tools: { name: ToolName; readOnly: boolean; description: string }[] = [
     name: 'find_similar_tracks',
     readOnly: true,
     description:
-      'Recommend tracks similar to one library track, with a calibrated quality floor and alternate-version filtering. Ambiguous analysis failures are errors, not shortages.',
+      'Recommend tracks similar to one library track that meet the similarity quality cutoff, with alternate-version filtering. Ambiguous analysis failures are errors, not shortages.',
   },
   {
     name: 'check_audiomuse_connection',
     readOnly: true,
     description:
-      'Check optional AudioMuse authentication, version, and calibration configuration. Does not analyze the library.',
+      'Check optional AudioMuse authentication, version, and each scale’s calibration (similarity, description): calibrated with its quality cutoff, missing, or stale with the changes that made it stale. Recalibrate a missing or stale scale before using it. Does not analyze the library.',
+  },
+  {
+    name: 'reset_calibration',
+    readOnly: false,
+    description:
+      'Mark one scale’s calibration stale after an AudioMuse model or index change that cannot be detected, so recommendations on that scale report calibration_required until it is recalibrated. Starts fresh calibration ratings; earlier ratings and calibrations are kept as history. Only reset when the user reports such a change.',
   },
   {
     name: 'discover_tracks',
@@ -171,12 +177,14 @@ export function createMcpServer(service: PlaylistService): McpServer {
               'publish_playlist',
               'reconcile_operation',
               'expand_playlist_draft',
+              'reset_calibration',
             ].includes(tool.name),
           openWorldHint: ![
             'get_playlist_draft',
             'get_operation',
             'copy_playlist_draft',
             'preview_playlist',
+            'reset_calibration',
           ].includes(tool.name),
         },
       },
