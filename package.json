@@ -1,6 +1,6 @@
 {
   "name": "@xandreiathome/navidrome-playlist-mcp",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "packageManager": "pnpm@12.18.0",
   "type": "module",
   "description": "Local agent-driven Navidrome playlist service",
