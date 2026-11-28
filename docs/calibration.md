@@ -69,8 +69,9 @@ After you change models, analysis or index settings, or the distance metric, or
 after a large library change, ask your assistant to reset the affected scale. Reset
 marks it stale until you recalibrate.
 
-Recalibration starts with fresh ratings. Earlier ratings and calibrations stay in
-the local database as history.
+Saving from ratings or resetting a calibrated scale starts fresh ratings. Earlier
+ratings and calibrations stay in the local database as history. Saving a cutoff
+with a note leaves ratings in progress counting toward the next proposal.
 
 ## Moving cutoffs from a calibration file
 
