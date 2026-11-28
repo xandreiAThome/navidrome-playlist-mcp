@@ -7,7 +7,7 @@ import { password, scriptedPrompts, text } from '../support/prompts.ts';
 import type { Answer } from '../support/prompts.ts';
 import { parseSetupArgs } from '../../src/setup/flags.ts';
 import type { SetupFlags } from '../../src/setup/flags.ts';
-import { SetupFailed } from '../../src/setup/prompts.ts';
+import { SetupFailed } from '../../src/setup/prompts/prompts.ts';
 import { runSetup } from '../../src/setup/run.ts';
 
 let remote: Awaited<ReturnType<typeof navidromeFixture>>;

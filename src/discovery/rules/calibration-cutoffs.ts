@@ -1,5 +1,4 @@
-import { releaseMinor } from './release.ts';
-import { Problem } from '../playlists/domain.ts';
+import { releaseMinor } from '../adapters/audiomuse-release.ts';
 import type {
   Calibration,
   CalibrationBinding,
@@ -7,8 +6,9 @@ import type {
   CalibrationNeed,
   CalibrationRating,
   CalibrationScale,
-  ToolData,
-} from '../playlists/domain.ts';
+} from '../records/calibration.ts';
+import { Problem } from '../../problem.ts';
+import type { ToolData } from '../../tools/outputs.ts';
 
 const baseUrl = (url: string) => url.replace(/\/$/, '');
 

@@ -1,8 +1,8 @@
 import { parseArgs } from 'node:util';
-import { SUPPORTED_CLIENTS } from './clients.ts';
-import type { Selection } from './clients.ts';
-import { AUDIOMUSE_URL, NAVIDROME_URL, normalizeBaseUrl } from './url.ts';
-import type { UrlService } from './url.ts';
+import { SUPPORTED_CLIENTS } from './steps/clients.ts';
+import type { Selection } from './steps/clients.ts';
+import { AUDIOMUSE_URL, NAVIDROME_URL, normalizeBaseUrl } from './steps/url.ts';
+import type { UrlService } from './steps/url.ts';
 
 /**
  * Answers given on the command line and in the environment. A present value is

@@ -2,8 +2,24 @@ import { posix, win32 } from 'node:path';
 import { homedir } from 'node:os';
 import { z } from 'zod';
 import { baseUrlFault } from './base-url.ts';
-import { Problem } from './playlists/domain.ts';
-import type { Config } from './playlists/domain.ts';
+import { Problem } from './problem.ts';
+
+export type Config = {
+  audiomuse?: {
+    url: string;
+    token: string;
+    server: string;
+    budgetMs: number;
+  };
+  url: string;
+  username: string;
+  password: string;
+  databasePath: string;
+  requireApproval: boolean;
+  timeoutMs: number;
+  searchPageSize: number;
+  searchMaxPages: number;
+};
 
 const optionalSetting = <T extends z.ZodType>(schema: T) =>
   z.preprocess((value) => (value === '' ? undefined : value), schema.optional());

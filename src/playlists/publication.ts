@@ -1,5 +1,9 @@
-import { Problem } from './domain.ts';
-import type { Config, Draft, Operation, RemotePlaylist, ToolInput } from './domain.ts';
+import type { Config } from '../config.ts';
+import type { RemotePlaylist } from '../library.ts';
+import type { Draft } from './records/drafts.ts';
+import type { Operation } from './records/operations.ts';
+import { Problem } from '../problem.ts';
+import type { ToolInput } from '../tools/inputs.ts';
 import type { Storage } from '../database/storage.ts';
 import type { Navidrome } from '../navidrome/client.ts';
 

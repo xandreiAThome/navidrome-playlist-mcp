@@ -1,8 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import type { z } from 'zod';
-import { toolSchemas } from '../playlists/domain.ts';
-import type { ToolName } from '../playlists/domain.ts';
-import type { PlaylistService } from '../playlists/service.ts';
+import { toolSchemas } from '../tools/inputs.ts';
+import type { ToolName } from '../tools/inputs.ts';
+import type { PlaylistService } from '../tools/service.ts';
 
 const tools: { name: ToolName; readOnly: boolean; description: string }[] = [
   {

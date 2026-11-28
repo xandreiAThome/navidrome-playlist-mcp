@@ -1,7 +1,7 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { stripVTControlCharacters } from 'node:util';
-import { multiselectRow } from '../../src/setup/terminal.ts';
+import { multiselectRow } from '../../src/setup/prompts/terminal.ts';
 
 const plain = (row: string) => stripVTControlCharacters(row);
 

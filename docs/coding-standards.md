@@ -5,7 +5,8 @@ patterns for changes and reviews. Mechanical settings remain authoritative in
 [package.json](../package.json), [TypeScript configuration](../tsconfig.json),
 [ESLint configuration](../eslint.config.js), and
 [Prettier configuration](../.prettierrc.json). Module ownership is documented in
-the [architecture guide](architecture.md), with code entry points in the
+the [architecture guide](architecture.md), where code belongs in
+[code organization](code-organization.md), and code entry points in the
 [project map](project-map.md); domain meanings and architectural guarantees remain
 authoritative in the glossary and ADRs linked there.
 
@@ -117,8 +118,8 @@ authoritative in the glossary and ADRs linked there.
 ## Keeping the guidance current
 
 Change shared contracts, their behavior tests, and affected tool descriptions in
-the same change. When moving a module or changing its ownership, update the
-project map; revise the architecture when its boundaries or guarantees change.
+the same change. When moving a module or changing its ownership, follow
+[code organization](code-organization.md) and update the project map; revise the architecture when its boundaries or guarantees change.
 Link feature specs to shared conventions rather than copying
 them. Keep runtime versions and mechanical rules in configuration, decision
 rationale in ADRs, domain terms in the glossary, and setup instructions in the

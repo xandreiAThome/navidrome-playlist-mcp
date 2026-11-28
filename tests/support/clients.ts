@@ -1,5 +1,5 @@
-import type { ServerEntry } from '../../src/setup/entry.ts';
-import type { ClientId, Clients, InstallOutcome } from '../../src/setup/clients.ts';
+import type { ServerEntry } from '../../src/setup/install/entry.ts';
+import type { ClientId, Clients, InstallOutcome } from '../../src/setup/steps/clients.ts';
 
 const NAMES: Record<ClientId, string> = {
   'claude-code': 'Claude Code',

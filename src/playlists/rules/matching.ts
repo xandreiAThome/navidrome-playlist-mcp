@@ -1,4 +1,4 @@
-import type { RequestedSong, Resolution, Track } from './domain.ts';
+import type { RequestedSong, Resolution, Track } from '../../library.ts';
 
 export function normalize(value: string): string {
   return value

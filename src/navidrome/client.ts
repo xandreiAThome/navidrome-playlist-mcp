@@ -1,7 +1,9 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
-import { Problem, trackSchema } from '../playlists/domain.ts';
-import type { Config, Track, RemotePlaylist } from '../playlists/domain.ts';
+import type { Config } from '../config.ts';
+import { trackSchema } from '../library.ts';
+import type { RemotePlaylist, Track } from '../library.ts';
+import { Problem } from '../problem.ts';
 
 const envelopeSchema = z.object({
   'subsonic-response': z

@@ -1,17 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import { Problem, targetSchema } from './domain.ts';
-import type {
-  Config,
-  Draft,
-  Entry,
-  RemotePlaylist,
-  ToolInput,
-  UpdateOperation,
-  UpdateComparison,
-} from './domain.ts';
+import type { Config } from '../config.ts';
+import type { RemotePlaylist } from '../library.ts';
+import { targetSchema } from './records/drafts.ts';
+import type { Draft, Entry } from './records/drafts.ts';
+import type { UpdateComparison, UpdateOperation } from './records/operations.ts';
+import { Problem } from '../problem.ts';
+import type { ToolInput } from '../tools/inputs.ts';
 import type { Storage } from '../database/storage.ts';
 import type { Navidrome } from '../navidrome/client.ts';
-import { match } from './matching.ts';
+import { match } from './rules/matching.ts';
 
 const ids = (target: RemotePlaylist) => target.tracks.map((t) => t.id);
 const same = (a: RemotePlaylist, b: RemotePlaylist) =>

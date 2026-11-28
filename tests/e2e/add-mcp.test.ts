@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-const adapter = new URL('../../dist/setup/add-mcp.js', import.meta.url).href;
+const adapter = new URL('../../dist/setup/install/add-mcp.js', import.meta.url).href;
 
 /**
  * add-mcp resolves client paths when it is first imported, so the real adapter
@@ -160,7 +160,7 @@ test('the add-mcp adapter reads an existing entry whether or not the client is d
   assert.equal(result.cursor, null);
 });
 
-const clientsModule = new URL('../../dist/setup/clients.js', import.meta.url).href;
+const clientsModule = new URL('../../dist/setup/steps/clients.js', import.meta.url).href;
 
 /** A child process environment whose home and config directories are under `home`. */
 function homeEnv(home: string, overrides: Record<string, string> = {}) {

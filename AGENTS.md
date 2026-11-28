@@ -25,6 +25,11 @@ Before changing system boundaries or guarantees, read
 Before navigating the codebase, read `docs/project-map.md` for module
 entry points and authoritative configuration.
 
+### Code organization
+
+Before adding modules or moving code, read `docs/code-organization.md`
+for where code belongs.
+
 ### Coding standards
 
 Before implementing or reviewing code, read `docs/coding-standards.md`

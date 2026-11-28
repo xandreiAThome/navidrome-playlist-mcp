@@ -6,8 +6,8 @@ import { agents, detectGlobalAgents, getAgentTypes, upsertServer } from 'add-mcp
 import * as jsonc from 'jsonc-parser';
 import type { AgentType } from 'add-mcp';
 import { z } from 'zod';
-import { SUPPORTED_CLIENTS } from './clients.ts';
-import type { ClientId, Clients } from './clients.ts';
+import { SUPPORTED_CLIENTS } from '../steps/clients.ts';
+import type { ClientId, Clients } from '../steps/clients.ts';
 import { ENTRY_NAME } from './entry.ts';
 import type { ServerEntry } from './entry.ts';
 

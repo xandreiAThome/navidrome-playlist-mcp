@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs';
 import * as clack from '@clack/prompts';
 import { z } from 'zod';
-import { addMcpClients } from './add-mcp.ts';
+import { addMcpClients } from './install/add-mcp.ts';
 import { parseSetupArgs } from './flags.ts';
-import { SetupCancelled, SetupFailed, SetupInterrupted } from './prompts.ts';
+import { SetupCancelled, SetupFailed, SetupInterrupted } from './prompts/prompts.ts';
 import { runSetup } from './run.ts';
-import { terminalPrompts } from './terminal.ts';
+import { terminalPrompts } from './prompts/terminal.ts';
 
 /** The running package's own version, pinned into installed entries. */
 function ownVersion(): string {

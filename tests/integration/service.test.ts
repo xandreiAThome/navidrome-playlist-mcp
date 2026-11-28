@@ -1,7 +1,7 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { navidromeFixture } from '../support/navidrome.ts';
-import type { PlaylistService } from '../../src/playlists/service.ts';
+import type { PlaylistService } from '../../src/tools/service.ts';
 import { createApp } from '../../src/app.ts';
 
 async function ok<T>(service: PlaylistService, tool: string, input: unknown): Promise<T> {

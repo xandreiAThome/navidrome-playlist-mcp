@@ -4,25 +4,21 @@ import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { mkdirSync, chmodSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import {
-  Problem,
-  draftSchema,
-  operationSchema,
-  expansionResultSchema,
-  updateOperationSchema,
-} from '../playlists/domain.ts';
+import type { Config } from '../config.ts';
 import type {
-  Config,
-  Draft,
-  Operation,
-  ExpansionResult,
-  UpdateOperation,
   Calibration,
   CalibrationBinding,
-  CalibrationScale,
   CalibrationRating,
-} from '../playlists/domain.ts';
-import { releaseMinor } from '../discovery/release.ts';
+  CalibrationScale,
+} from '../discovery/records/calibration.ts';
+import { expansionResultSchema } from '../discovery/records/results.ts';
+import type { ExpansionResult } from '../discovery/records/results.ts';
+import { draftSchema } from '../playlists/records/drafts.ts';
+import type { Draft } from '../playlists/records/drafts.ts';
+import { operationSchema, updateOperationSchema } from '../playlists/records/operations.ts';
+import type { Operation, UpdateOperation } from '../playlists/records/operations.ts';
+import { Problem } from '../problem.ts';
+import { releaseMinor } from '../discovery/adapters/audiomuse-release.ts';
 import { migrate } from './migrate.ts';
 import {
   calibrations,

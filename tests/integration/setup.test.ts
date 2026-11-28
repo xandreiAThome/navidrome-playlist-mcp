@@ -6,9 +6,9 @@ import { navidromeFixture } from '../support/navidrome.ts';
 import { fakeClients } from '../support/clients.ts';
 import { confirm, multiselect, password, scriptedPrompts, text } from '../support/prompts.ts';
 import type { Answer, Event } from '../support/prompts.ts';
-import type { Choice } from '../../src/setup/prompts.ts';
+import type { Choice } from '../../src/setup/prompts/prompts.ts';
 import { runSetup } from '../../src/setup/run.ts';
-import { SetupCancelled, SetupInterrupted } from '../../src/setup/prompts.ts';
+import { SetupCancelled, SetupInterrupted } from '../../src/setup/prompts/prompts.ts';
 
 let remote: Awaited<ReturnType<typeof navidromeFixture>>;
 beforeEach(async () => {

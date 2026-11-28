@@ -1,7 +1,7 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { createApp } from '../../src/app.ts';
-import type { Draft } from '../../src/playlists/domain.ts';
+import type { Draft } from '../../src/playlists/records/drafts.ts';
 import { audioMuseFixture } from '../support/audiomuse.ts';
 import { navidromeFixture } from '../support/navidrome.ts';
 

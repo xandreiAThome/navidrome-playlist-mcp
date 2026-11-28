@@ -1,12 +1,12 @@
-import { audioMuseStep } from './audiomuse.ts';
-import { clientStep } from './clients.ts';
-import type { Clients } from './clients.ts';
-import { serverEntry } from './entry.ts';
-import type { ServerEntry } from './entry.ts';
+import { audioMuseStep } from './steps/audiomuse.ts';
+import { clientStep } from './steps/clients.ts';
+import type { Clients } from './steps/clients.ts';
+import { serverEntry } from './install/entry.ts';
+import type { ServerEntry } from './install/entry.ts';
 import type { SetupFlags } from './flags.ts';
-import { navidromeStep } from './navidrome.ts';
-import { unattended } from './prompts.ts';
-import type { Prompts } from './prompts.ts';
+import { navidromeStep } from './steps/navidrome.ts';
+import { unattended } from './prompts/prompts.ts';
+import type { Prompts } from './prompts/prompts.ts';
 
 export type SetupOptions = {
   prompts: Prompts;

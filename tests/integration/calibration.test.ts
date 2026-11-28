@@ -4,8 +4,11 @@ import { Storage } from '../../src/database/storage.ts';
 import { navidromeFixture } from '../support/navidrome.ts';
 import { audioMuseFixture } from '../support/audiomuse.ts';
 import { createApp } from '../../src/app.ts';
-import { Problem } from '../../src/playlists/domain.ts';
-import type { CalibrationBinding, CalibrationScale } from '../../src/playlists/domain.ts';
+import type {
+  CalibrationBinding,
+  CalibrationScale,
+} from '../../src/discovery/records/calibration.ts';
+import { Problem } from '../../src/problem.ts';
 
 /** A Navidrome and AudioMuse pair with AudioMuse configured but not yet calibrated. */
 async function discoveryFixture(t: { onTestFinished(fn: () => unknown): void }) {
