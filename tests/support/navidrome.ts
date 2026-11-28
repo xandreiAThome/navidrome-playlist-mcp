@@ -28,10 +28,13 @@ export async function navidromeFixture() {
     serverVersion: '',
     minimalPlaylistResponse: false,
     dropCreateResponse: false,
+    /** The creation response carries the playlist without its ID. */
+    omitCreatedId: false,
     visibilityFails: false,
     dropLastTrack: false,
     delayCreateMs: 0,
     searchRepeatsPage: false,
+    searchRequests: 0,
     leakError: false,
     visibilityIgnored: false,
     creationRequests: 0,
@@ -93,6 +96,7 @@ export async function navidromeFixture() {
       return;
     }
     if (endpoint === 'search3') {
+      controls.searchRequests++;
       // Deliberately return broad candidates: matching is the service's job.
       const offset = controls.searchRepeatsPage ? 0 : Number(p.get('songOffset') ?? 0);
       const count = Number(p.get('songCount') ?? 100);
@@ -144,6 +148,10 @@ export async function navidromeFixture() {
       playlists.push(playlist);
       if (controls.dropCreateResponse) {
         res.destroy();
+        return;
+      }
+      if (controls.omitCreatedId) {
+        send({ playlist: { ...playlist, id: undefined } });
         return;
       }
       send({ playlist });

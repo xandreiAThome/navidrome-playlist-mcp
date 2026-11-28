@@ -560,3 +560,197 @@ test('copying a locked draft intentionally creates another private playlist with
     ['other', 'other'],
   );
 });
+
+test('adopting a playlist whose contents differ from the draft is refused and leaves the outcome unknown', async (t) => {
+  const remote = await navidromeFixture();
+  t.onTestFinished(() => remote.close());
+  const service = createApp(remote.config);
+  t.onTestFinished(() => service.close());
+  const draft = await ready(service);
+  remote.controls.dropCreateResponse = true;
+  const operation = await ok<Operation>(service, 'publish_playlist', {
+    draftId: draft.id,
+    revision: 1,
+    operationKey: 'lost',
+  });
+  remote.controls.dropCreateResponse = false;
+  remote.playlists.push({
+    id: 'unrelated',
+    name: 'Evening',
+    public: true,
+    entry: [remote.songs[0]!],
+  });
+  const adopt = {
+    operationId: operation.id,
+    action: 'adopt',
+    reason: 'Operator picked a playlist by name.',
+    expectedRecoveryVersion: 0,
+  };
+  const mismatch = await service.execute('reconcile_operation', {
+    ...adopt,
+    playlistId: 'unrelated',
+    recoveryKey: 'wrong-playlist',
+  });
+  assert.equal(mismatch.status, 'adoption_mismatch');
+  const after = await ok<Operation>(service, 'get_operation', { operationId: operation.id });
+  assert.equal(after.status, 'unknown_outcome');
+  assert.equal(after.playlistId, undefined);
+  const adopted = await ok<Operation>(service, 'reconcile_operation', {
+    ...adopt,
+    playlistId: 'p1',
+    recoveryKey: 'right-playlist',
+    expectedRecoveryVersion: (after as Operation & { recoveryVersion: number }).recoveryVersion,
+  });
+  assert.equal(adopted.status, 'succeeded');
+  assert.equal(adopted.playlistId, 'p1');
+  assert.equal(remote.controls.creationRequests, 1);
+});
+
+test('a creation response without a playlist ID is an unknown outcome, never a second creation', async (t) => {
+  const remote = await navidromeFixture();
+  t.onTestFinished(() => remote.close());
+  const service = createApp(remote.config);
+  t.onTestFinished(() => service.close());
+  const draft = await ready(service);
+  remote.controls.omitCreatedId = true;
+  const operation = await ok<Operation>(service, 'publish_playlist', {
+    draftId: draft.id,
+    revision: 1,
+    operationKey: 'no-id',
+  });
+  assert.equal(operation.status, 'unknown_outcome');
+  assert.equal(operation.playlistId, undefined);
+  assert.deepEqual(operation.details, {
+    reason: 'creation_not_confirmed',
+    nextAction: 'reconcile_operation',
+  });
+  const repeated = await ok<Operation>(service, 'publish_playlist', {
+    draftId: draft.id,
+    revision: 1,
+    operationKey: 'no-id-again',
+  });
+  assert.equal(repeated.id, operation.id);
+  assert.equal(remote.controls.creationRequests, 1);
+  assert.equal(remote.playlists.length, 1);
+});
+
+test('a failed visibility change leaves the known playlist incomplete until resumed', async (t) => {
+  const remote = await navidromeFixture();
+  t.onTestFinished(() => remote.close());
+  const service = createApp(remote.config);
+  t.onTestFinished(() => service.close());
+  const draft = await ready(service);
+  remote.controls.visibilityFails = true;
+  const operation = await ok<Operation>(service, 'publish_playlist', {
+    draftId: draft.id,
+    revision: 1,
+    operationKey: 'visibility-fails',
+  });
+  assert.equal(operation.status, 'incomplete');
+  assert.equal(operation.playlistId, 'p1');
+  assert.equal(remote.playlists[0]?.public, false);
+  remote.controls.visibilityFails = false;
+  const resumed = await ok<Operation>(service, 'reconcile_operation', {
+    operationId: operation.id,
+    action: 'resume',
+    recoveryKey: 'resume-after-failure',
+    expectedRecoveryVersion: 0,
+  });
+  assert.equal(resumed.status, 'succeeded');
+  assert.equal(remote.playlists[0]?.public, true);
+  assert.equal(remote.controls.creationRequests, 1);
+});
+
+test('playlist drafts and update drafts cannot be used through each other’s tools', async (t) => {
+  const remote = await navidromeFixture();
+  t.onTestFinished(() => remote.close());
+  remote.playlists.push({ id: 'target', name: 'Existing', public: false, entry: [] });
+  const service = createApp(remote.config);
+  t.onTestFinished(() => service.close());
+  const entries = [{ request: { title: 'Teardrop', artist: 'Massive Attack' }, trackId: 'other' }];
+  const update = await ok<Draft>(service, 'save_playlist_update', {
+    playlistId: 'target',
+    entries,
+  });
+  await ok(service, 'preview_playlist_update', { draftId: update.id, revision: 1 });
+  const ref = { draftId: update.id, revision: 1 };
+  for (const [tool, input] of [
+    ['publish_playlist', { ...ref, operationKey: 'wrong-tool' }],
+    ['copy_playlist_draft', ref],
+    ['save_playlist_draft', { draftId: update.id, expectedRevision: 1, name: 'X', entries }],
+  ] as const)
+    assert.equal((await service.execute(tool, input)).status, 'invalid_input', tool);
+  const draft = await ready(service);
+  assert.equal(
+    (
+      await service.execute('apply_playlist_update', {
+        draftId: draft.id,
+        revision: 1,
+        operationKey: 'wrong-tool',
+      })
+    ).status,
+    'invalid_input',
+  );
+  assert.equal(remote.controls.creationRequests, 0);
+  assert.equal(remote.controls.appendRequests, 0);
+  assert.deepEqual(remote.playlists[0]?.entry, []);
+});
+
+test('recovery decisions must name exactly the evidence their action needs', async (t) => {
+  const remote = await navidromeFixture();
+  t.onTestFinished(() => remote.close());
+  const service = createApp(remote.config);
+  t.onTestFinished(() => service.close());
+  const base = { operationId: 'any', recoveryKey: 'k', expectedRecoveryVersion: 0 };
+  for (const invalid of [
+    { action: 'adopt', reason: 'Found it.' },
+    { action: 'adopt', playlistId: 'p1' },
+    { action: 'confirm_not_created' },
+    { action: 'confirm_not_created', reason: 'Absent.', playlistId: 'p1' },
+    { action: 'resume', reason: 'Because.' },
+    { action: 'resume', playlistId: 'p1' },
+  ])
+    assert.equal(
+      (await service.execute('reconcile_operation', { ...base, ...invalid })).status,
+      'invalid_input',
+      JSON.stringify(invalid),
+    );
+  assert.equal(
+    (
+      await service.execute('reconcile_operation', {
+        ...base,
+        action: 'confirm_not_created',
+        reason: 'Absent.',
+      })
+    ).status,
+    'not_found',
+  );
+});
+
+test('an unknown tool is refused without reaching any workflow', async (t) => {
+  const remote = await navidromeFixture();
+  t.onTestFinished(() => remote.close());
+  const service = createApp(remote.config);
+  t.onTestFinished(() => service.close());
+  for (const tool of ['delete_playlist', 'toString', '__proto__'])
+    assert.deepEqual(await service.execute(tool, {}), {
+      status: 'unknown_tool',
+      message: 'Unknown tool.',
+      details: undefined,
+    });
+});
+
+test('search stops paging when the server repeats a page and reports the result incomplete', async (t) => {
+  const remote = await navidromeFixture();
+  t.onTestFinished(() => remote.close());
+  const service = createApp({ ...remote.config, searchPageSize: 1, searchMaxPages: 10 });
+  t.onTestFinished(() => service.close());
+  remote.controls.searchRepeatsPage = true;
+  const result = await ok<{ tracks: { id: string }[]; complete: boolean }>(
+    service,
+    'search_tracks',
+    { query: 'anything' },
+  );
+  assert.deepEqual(result, { tracks: [remote.songs[0]], complete: false });
+  assert.equal(remote.controls.searchRequests, 2);
+});

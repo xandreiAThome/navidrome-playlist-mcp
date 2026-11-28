@@ -218,3 +218,25 @@ test('a version 4 database keeps its drafts and gains calibration storage on upg
   assert.deepEqual(storage.currentCalibration('description'), saved);
   assert.equal(storage.getDraft('kept').name, 'Kept');
 });
+
+test('a database from a newer release stops startup without changing it', async (t) => {
+  const remote = await navidromeFixture();
+  t.onTestFinished(() => remote.close());
+  const current = createApp(remote.config);
+  current.close();
+  const db = new Database(remote.config.databasePath);
+  const latest = (
+    db.prepare('SELECT MAX(version) AS v FROM schema_migrations').get() as { v: number }
+  ).v;
+  db.prepare('INSERT INTO schema_migrations VALUES (?)').run(latest + 1);
+  const tables = () =>
+    db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all();
+  const before = tables();
+  assert.throws(() => createApp(remote.config), /Database schema is newer than this application/);
+  assert.deepEqual(tables(), before);
+  assert.equal(
+    (db.prepare('SELECT MAX(version) AS v FROM schema_migrations').get() as { v: number }).v,
+    latest + 1,
+  );
+  db.close();
+});
