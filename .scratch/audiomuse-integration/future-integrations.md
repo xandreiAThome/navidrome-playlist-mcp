@@ -1,6 +1,6 @@
 # Future AudioMuse-AI integrations
 
-Ideas saved for future reference. These are outside the [agreed integration spec](spec.md); documenting them does not authorize implementation or establish a delivery order.
+Ideas saved for future reference. These are outside the [shipped AudioMuse discovery](../../docs/discovery.md); documenting them does not authorize implementation or establish a delivery order.
 
 | Idea | Example workflow | Questions to resolve before planning |
 | --- | --- | --- |
