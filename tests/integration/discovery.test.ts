@@ -1,7 +1,7 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { createApp } from '../../src/app.ts';
-import type { Draft } from '../../src/playlists/domain.ts';
+import type { Draft } from '../../src/playlists/records/drafts.ts';
 import { audioMuseFixture } from '../support/audiomuse.ts';
 import { navidromeFixture } from '../support/navidrome.ts';
 
@@ -195,7 +195,9 @@ test('single-track similarity proves reference availability and reports ambiguou
     ['other'],
   );
   assert.equal(found.shortfall, 1);
-  assert(found.warnings.length > 0);
+  assert.deepEqual(found.warnings, [
+    'Alternate-recording filtering uses matching artist and normalized recording titles; uncertain identities remain for review. Similar titles alone do not establish identity.',
+  ]);
   audio.controls.analysisFails = true;
   const failure = await service.execute('find_similar_tracks', { trackId: 'studio' });
   assert.equal(failure.status, 'analysis_unavailable');

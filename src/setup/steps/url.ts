@@ -1,5 +1,5 @@
-import { baseUrlFault } from '../base-url.ts';
-import type { Prompts } from './prompts.ts';
+import { baseUrlFault } from '../../base-url.ts';
+import type { Prompts } from '../prompts/prompts.ts';
 
 /** A service whose base URL setup asks for. */
 export type UrlService = {

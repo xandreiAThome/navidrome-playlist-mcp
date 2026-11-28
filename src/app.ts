@@ -1,10 +1,10 @@
 import { Updates } from './playlists/updates.ts';
-import type { Config } from './playlists/domain.ts';
+import type { Config } from './config.ts';
 import { Storage } from './database/storage.ts';
 import { Navidrome } from './navidrome/client.ts';
 import { Publication } from './playlists/publication.ts';
-import { PlaylistService } from './playlists/service.ts';
-import { AudioMuse } from './discovery/audiomuse.ts';
+import { PlaylistService } from './tools/service.ts';
+import { AudioMuse } from './discovery/adapters/audiomuse.ts';
 import { Discovery } from './discovery/service.ts';
 
 export function createApp(config: Config): PlaylistService {

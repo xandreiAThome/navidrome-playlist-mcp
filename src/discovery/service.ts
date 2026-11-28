@@ -1,24 +1,27 @@
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import type { Storage } from '../database/storage.ts';
-import { Problem } from '../playlists/domain.ts';
+import type { Config } from '../config.ts';
 import type {
-  Config,
-  DiscoveryResult,
-  RecommendedTrack,
-  Track,
-  ToolInput,
-  ExpansionResult,
-  Draft,
   CalibrationBinding,
   CalibrationRating,
   CalibrationScale,
   CalibrationStatus,
-  ToolData,
-} from '../playlists/domain.ts';
+} from './records/calibration.ts';
+import type { DiscoveryResult, ExpansionResult, RecommendedTrack } from './records/results.ts';
+import type { Track } from '../library.ts';
+import type { Draft } from '../playlists/records/drafts.ts';
+import { Problem } from '../problem.ts';
+import type { ToolInput } from '../tools/inputs.ts';
+import type { ToolData } from '../tools/outputs.ts';
 import type { Navidrome } from '../navidrome/client.ts';
-import type { AudioMuse } from './audiomuse.ts';
-import { calibrationChanges, checkProposal, meetsCutoff, proposeCutoff } from './calibration.ts';
+import type { AudioMuse } from './adapters/audiomuse.ts';
+import {
+  calibrationChanges,
+  checkProposal,
+  meetsCutoff,
+  proposeCutoff,
+} from './rules/calibration-cutoffs.ts';
 
 const rowSchema = z.object({
   item_id: z.string().min(1).max(500),

@@ -1,12 +1,12 @@
 import { z } from 'zod';
-import { Problem } from '../playlists/domain.ts';
-import type { Config } from '../playlists/domain.ts';
+import type { Config } from '../../config.ts';
+import { Problem } from '../../problem.ts';
 import {
   isSupportedRelease,
   releaseMinor,
   supportedAudioMuse,
   supportedReleaseMessage,
-} from './release.ts';
+} from './audiomuse-release.ts';
 
 /** Why an AudioMuse request failed, without any upstream text. */
 export type RequestFailure = { reason: 'unreachable' } | { reason: 'rejected'; httpStatus: number };

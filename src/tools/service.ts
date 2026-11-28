@@ -1,20 +1,16 @@
-import type { Updates } from './updates.ts';
+import type { Updates } from '../playlists/updates.ts';
 import { z } from 'zod';
-import { Problem, toolSchemas } from './domain.ts';
-import type {
-  Result,
-  Entry,
-  RequestedSong,
-  ToolName,
-  ToolInput,
-  ToolData,
-  ToolHandlers,
-} from './domain.ts';
+import type { RequestedSong } from '../library.ts';
+import type { Entry } from '../playlists/records/drafts.ts';
+import { Problem } from '../problem.ts';
+import { toolSchemas } from './inputs.ts';
+import type { ToolInput, ToolName } from './inputs.ts';
+import type { Result, ToolData, ToolHandlers } from './outputs.ts';
 import type { Navidrome } from '../navidrome/client.ts';
-import { match } from './matching.ts';
+import { match } from '../playlists/rules/matching.ts';
 import type { Storage } from '../database/storage.ts';
-import type { Publication } from './publication.ts';
-import type { AudioMuse } from '../discovery/audiomuse.ts';
+import type { Publication } from '../playlists/publication.ts';
+import type { AudioMuse } from '../discovery/adapters/audiomuse.ts';
 import type { Discovery } from '../discovery/service.ts';
 
 export class PlaylistService {

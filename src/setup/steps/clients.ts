@@ -1,7 +1,7 @@
-import { manualConfig } from './entry.ts';
-import type { ServerEntry } from './entry.ts';
-import { SetupInterrupted } from './prompts.ts';
-import type { Choice, Prompts } from './prompts.ts';
+import { manualConfig } from '../install/entry.ts';
+import type { ServerEntry } from '../install/entry.ts';
+import { SetupInterrupted } from '../prompts/prompts.ts';
+import type { Choice, Prompts } from '../prompts/prompts.ts';
 
 /**
  * The MCP clients setup installs into. An allowlist of our own rather than every

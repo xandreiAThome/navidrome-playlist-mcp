@@ -1,5 +1,7 @@
 import type { TestContext } from 'vitest';
-import type { ToolName, ToolData, Config } from '../../src/playlists/domain.ts';
+import type { Config } from '../../src/config.ts';
+import type { ToolName } from '../../src/tools/inputs.ts';
+import type { ToolData } from '../../src/tools/outputs.ts';
 import { test, expect } from 'vitest';
 import { createApp } from '../../src/app.ts';
 import { navidromeFixture } from '../support/navidrome.ts';

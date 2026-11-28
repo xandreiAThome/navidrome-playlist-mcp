@@ -1,8 +1,12 @@
-import { AudioMuse, RequestFailed, UnsupportedRelease } from '../discovery/audiomuse.ts';
-import { supportedReleaseMessage } from '../discovery/release.ts';
-import { Problem } from '../playlists/domain.ts';
-import type { Prompts } from './prompts.ts';
-import { required } from './prompts.ts';
+import {
+  AudioMuse,
+  RequestFailed,
+  UnsupportedRelease,
+} from '../../discovery/adapters/audiomuse.ts';
+import { supportedReleaseMessage } from '../../discovery/adapters/audiomuse-release.ts';
+import { Problem } from '../../problem.ts';
+import type { Prompts } from '../prompts/prompts.ts';
+import { required } from '../prompts/prompts.ts';
 import { AUDIOMUSE_URL, askUrl } from './url.ts';
 
 export type AudioMuseSettings = { url: string; token: string; server: string };

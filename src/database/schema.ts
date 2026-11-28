@@ -10,7 +10,8 @@ import {
 } from 'drizzle-orm/sqlite-core';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
-import type { Operation, CalibrationScale, CalibrationVerdict } from '../playlists/domain.ts';
+import type { CalibrationScale, CalibrationVerdict } from '../discovery/records/calibration.ts';
+import type { Operation } from '../playlists/records/operations.ts';
 
 export const identity = sqliteTable(
   'identity',

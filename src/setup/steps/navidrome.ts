@@ -1,7 +1,7 @@
-import { ConnectionFailed, Navidrome, SubsonicError } from '../navidrome/client.ts';
-import type { Failure } from '../navidrome/client.ts';
-import { required } from './prompts.ts';
-import type { Prompts } from './prompts.ts';
+import { ConnectionFailed, Navidrome, SubsonicError } from '../../navidrome/client.ts';
+import type { Failure } from '../../navidrome/client.ts';
+import { required } from '../prompts/prompts.ts';
+import type { Prompts } from '../prompts/prompts.ts';
 import { NAVIDROME_URL, askUrl } from './url.ts';
 
 export type NavidromeAccount = { url: string; username: string; password: string };

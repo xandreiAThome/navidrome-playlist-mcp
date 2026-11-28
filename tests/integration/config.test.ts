@@ -1,6 +1,7 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { loadConfig } from '../../src/config.ts';
+import { Problem } from '../../src/problem.ts';
 
 const credentials = {
   NAVIDROME_URL: 'http://localhost:4533',
@@ -58,4 +59,31 @@ test('Windows defaults the database under LOCALAPPDATA', () => {
     loadConfig(credentials, host).databasePath,
     'C:\\Users\\user\\AppData\\Local\\navidrome-playlist-mcp\\playlists.sqlite',
   );
+});
+
+test('invalid or incomplete settings stop startup with a configuration error that omits secrets', () => {
+  const host = { platform: 'linux', homedir: '/home/user' } as const;
+  for (const env of [
+    { ...credentials, NAVIDROME_URL: 'not a url' },
+    { ...credentials, NAVIDROME_PASSWORD: '' },
+    { ...credentials, NAVIDROME_TIMEOUT_MS: '50' },
+    { ...credentials, NAVIDROME_URL: 'http://user:secret@localhost:4533' },
+    { ...credentials, NAVIDROME_URL: 'http://localhost:4533?token=secret' },
+    { ...credentials, NAVIDROME_URL: 'ftp://localhost' },
+    { ...credentials, AUDIOMUSE_URL: 'http://localhost:8000', AUDIOMUSE_SERVER: 'navidrome' },
+    {
+      ...credentials,
+      AUDIOMUSE_URL: 'http://user:secret@localhost:8000',
+      AUDIOMUSE_API_TOKEN: 'secret',
+      AUDIOMUSE_SERVER: 'navidrome',
+    },
+  ])
+    assert.throws(
+      () => loadConfig(env, host),
+      (error: unknown) =>
+        error instanceof Problem &&
+        error.code === 'configuration_error' &&
+        !error.message.includes('secret'),
+      JSON.stringify(env),
+    );
 });

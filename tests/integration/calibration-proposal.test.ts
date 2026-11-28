@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { navidromeFixture } from '../support/navidrome.ts';
 import { audioMuseFixture } from '../support/audiomuse.ts';
 import { createApp } from '../../src/app.ts';
-import type { CalibrationScale } from '../../src/playlists/domain.ts';
+import type { CalibrationScale } from '../../src/discovery/records/calibration.ts';
 
 /** An uncalibrated deployment whose service can be restarted on the same database. */
 async function uncalibrated(t: { onTestFinished(fn: () => unknown): void }) {

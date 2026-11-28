@@ -1,5 +1,5 @@
-import { SetupCancelled } from '../../src/setup/prompts.ts';
-import type { Choice, Prompts, Validate } from '../../src/setup/prompts.ts';
+import { SetupCancelled } from '../../src/setup/prompts/prompts.ts';
+import type { Choice, Prompts, Validate } from '../../src/setup/prompts/prompts.ts';
 
 type Kind = 'text' | 'password' | 'confirm' | 'select' | 'multiselect';
 /** One scripted answer; `message` must match the prompt it answers. */
