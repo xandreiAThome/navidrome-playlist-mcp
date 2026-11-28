@@ -12,10 +12,78 @@ Navidrome. Existing playlists keep their name, visibility, and track order.
 
 ## Get started
 
-You'll need a running Navidrome server and Node 26.13.0 or newer.
+You'll need a running Navidrome server and Node 26.13.0 or newer. Run:
 
-Add this to your MCP client's configuration, replacing `<version>` with a
-published version and the values with your own:
+```sh
+npx @xandreiathome/navidrome-playlist-mcp@latest setup
+```
+
+Setup asks for your Navidrome URL, username, and password, and checks them
+before going further. It shows the server version and account it connected to,
+and asks again for any value that fails, so it never saves a configuration that
+doesn't work. You can paste the URL with or without a trailing `/` or `/rest`.
+
+It then offers to set up AudioMuse recommendations (see
+[Want recommendations?](#want-recommendations)) and asks which MCP clients to
+install the server into. Clients found on this machine are listed first and
+preselected. Supported clients are Claude Code, Claude Desktop, VS Code, Cursor,
+Codex, Gemini CLI, GitHub Copilot CLI, Windsurf, and OpenCode. For anything else, choose
+"Show config to copy manually". Restart your MCP client afterwards to load the
+server.
+
+Setup adds a `navidrome` server to each client's user-level configuration,
+pinned to the version you ran, and leaves the client's other servers alone. It
+keeps your credentials only in that entry's `env` block and makes the file
+readable only by you. To upgrade or change credentials, run setup again. When a
+client already has the entry, setup shows what would change, with secrets
+masked, and asks before overwriting. If `XDG_CONFIG_HOME` points somewhere
+other than `~/.config`, setup prints the OpenCode entry for you to copy instead
+of writing it.
+
+### Run setup without prompts
+
+Flags answer setup's questions so it can run from a script:
+
+| Flag                    | Answers                                                                           |
+| ----------------------- | --------------------------------------------------------------------------------- |
+| `--url <url>`           | The Navidrome URL.                                                                |
+| `--username <name>`     | The Navidrome username.                                                           |
+| `--client <id>`         | A client to install into; repeat for several. `manual` prints the config to copy. |
+| `--audiomuse-url <url>` | Sets up AudioMuse at this URL.                                                    |
+| `--yes`, `-y`           | Asks nothing; see below.                                                          |
+
+Client IDs are `claude-code`, `claude-desktop`, `vscode`, `cursor`, `codex`,
+`gemini-cli`, `github-copilot-cli`, `windsurf`, `opencode`, and `manual`. Secrets are never
+flags: setup reads the password from `NAVIDROME_PASSWORD` and the AudioMuse
+token from `AUDIOMUSE_API_TOKEN`, or asks for them. Without `--yes`, setup asks
+only for what the flags leave out. `--yes` needs `--url`, `--username`,
+`--client`, and `NAVIDROME_PASSWORD` (plus `AUDIOMUSE_API_TOKEN` with
+`--audiomuse-url`), skips AudioMuse without `--audiomuse-url`, and stops before
+writing anything if a value fails its check. It overwrites an existing entry
+after showing its masked diff.
+
+```sh
+NAVIDROME_PASSWORD=... npx @xandreiathome/navidrome-playlist-mcp@latest setup \
+  --yes --url https://music.example.com --username me --client claude-code
+```
+
+### Configure a client by hand
+
+Your MCP client starts the server over stdin/stdout. The installed server reads
+settings only from its process environment, so put them in the client's `env`
+block rather than a `.env` file:
+
+| Variable              | Value                                         |
+| --------------------- | --------------------------------------------- |
+| `NAVIDROME_URL`       | Your Navidrome base URL, without `/rest`.     |
+| `NAVIDROME_USERNAME`  | Your Navidrome username.                      |
+| `NAVIDROME_PASSWORD`  | Your Navidrome (Subsonic) password.           |
+| `AUDIOMUSE_URL`       | Optional. Your AudioMuse-AI URL.              |
+| `AUDIOMUSE_API_TOKEN` | Optional. Your AudioMuse API token.           |
+| `AUDIOMUSE_SERVER`    | Required with AudioMuse. Its media server ID. |
+
+[.env.example](.env.example) lists every setting. For example, replacing
+`<version>` with a published version:
 
 ```json
 {
@@ -33,30 +101,7 @@ published version and the values with your own:
 }
 ```
 
-Use your Navidrome base URL, without `/rest`. Your MCP client starts the server
-when it connects; it communicates over stdin/stdout. The installed server reads
-settings only from its process environment, so put them in the client's `env`
-block rather than a `.env` file. [.env.example](.env.example) lists every setting.
 Pinning the version means upgrades happen only when you change it.
-
-### Moving from Docker
-
-Earlier versions ran in Docker and kept the database in the `playlist-data`
-volume. Stop your MCP clients, then copy the database files out of the volume
-(Compose named it `navidrome-mcp_playlist-data`; `docker volume ls` shows it):
-
-```sh
-docker run --rm --user "$(id -u):$(id -g)" \
-  -v navidrome-mcp_playlist-data:/data:ro -v "$PWD":/backup \
-  alpine sh -c 'cp /data/playlists.sqlite* /backup/'
-```
-
-Set `NAVIDROME_DB_PATH` to the absolute path of the copied `playlists.sqlite`.
-A database only opens with the exact `NAVIDROME_URL` and username that created
-it, so keep the same URL. If you used `http://host.docker.internal:4533`, keep
-that value and make the name resolve to Navidrome's address on this machine (for
-example, a hosts-file entry). After confirming the copy works, you can delete the
-volume and the `navidrome-mcp:local` image.
 
 ## Run locally instead
 
@@ -86,17 +131,21 @@ For your MCP client, use `node` as the command with these arguments:
 ## Want recommendations?
 
 Song lists work on their own. For similarity and description-based
-recommendations, connect a separately installed AudioMuse-AI 3.7.x instance (validated on v3.7.4).
+recommendations, connect a separately installed AudioMuse-AI 3.7.x instance
+(validated on v3.7.4).
 
-Set `AUDIOMUSE_URL`, `AUDIOMUSE_API_TOKEN`, and `AUDIOMUSE_SERVER` alongside the
-Navidrome settings.
-The server value is the `server_id` of your Navidrome connection in AudioMuse's
-`GET /api/servers` response. Discovery also needs
-`AUDIOMUSE_CALIBRATION_PATH`, a quality-calibration file for your deployment.
-
-See [AudioMuse setup](docs/discovery.md) for connection details and the
-[calibration guide](docs/calibration.md) for commands to collect, rate, and verify
+Answer yes when setup asks "Set up AudioMuse recommendations?", then enter
+AudioMuse's URL and API token. Setup checks the token and the release, and finds
+the AudioMuse media server that matches your Navidrome URL, asking you to choose
+when several match. Once it's installed, ask your assistant to calibrate
 recommendations.
+
+Discovery also needs `AUDIOMUSE_CALIBRATION_PATH`, a quality-calibration file for
+your deployment, which setup doesn't write yet. The
+[calibration guide](docs/calibration.md) has commands to collect, rate, and
+verify recommendations. To configure AudioMuse by hand, see
+[AudioMuse setup](docs/discovery.md); `AUDIOMUSE_SERVER` is the `server_id` of
+your Navidrome connection in AudioMuse's `GET /api/servers` response.
 
 ## Available tools
 

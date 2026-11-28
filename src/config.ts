@@ -2,6 +2,7 @@ import { posix, win32 } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { z } from 'zod';
+import { baseUrlFault } from './base-url.ts';
 import { Problem } from './playlists/domain.ts';
 import type { Config } from './playlists/domain.ts';
 import { isSupportedRelease, releaseMinor, supportedReleaseMessage } from './discovery/release.ts';
@@ -68,13 +69,7 @@ export function loadConfig(
         'AudioMuse configuration requires URL, API token, and selected media server.',
       );
     const audioUrl = new URL(value.AUDIOMUSE_URL);
-    if (
-      !['http:', 'https:'].includes(audioUrl.protocol) ||
-      audioUrl.username ||
-      audioUrl.password ||
-      audioUrl.search ||
-      audioUrl.hash
-    )
+    if (baseUrlFault(audioUrl))
       throw new Problem(
         'configuration_error',
         'Use an HTTP(S) AudioMuse base URL without embedded credentials, query, or fragment.',
@@ -126,13 +121,7 @@ export function loadConfig(
     }
   }
   const url = new URL(value.NAVIDROME_URL);
-  if (
-    !['http:', 'https:'].includes(url.protocol) ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash
-  )
+  if (baseUrlFault(url))
     throw new Problem(
       'configuration_error',
       'Use an HTTP(S) server base URL without credentials, query, or fragment.',

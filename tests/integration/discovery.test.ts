@@ -1,86 +1,9 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
 import { createApp } from '../../src/app.ts';
 import type { Draft } from '../../src/playlists/domain.ts';
+import { audioMuseFixture } from '../support/audiomuse.ts';
 import { navidromeFixture } from '../support/navidrome.ts';
-
-async function audioMuseFixture() {
-  const controls = {
-    onSimilarity: undefined as (() => Promise<void>) | undefined,
-    onVersion: undefined as (() => Promise<void>) | undefined,
-    onServers: undefined as (() => Promise<void>) | undefined,
-    navidromeUrl: '',
-    version: 'v3.7.4' as unknown,
-    fail: false,
-    analysisFails: false,
-    byReference: {} as Record<
-      string,
-      { item_id: string; title: string; author: string; similarity: number; distance: number }[]
-    >,
-    rows: [] as {
-      item_id: string;
-      title: string;
-      author: string;
-      similarity: number;
-      distance: number;
-    }[],
-  };
-  const server = createServer(async (req, res) => {
-    const url = new URL(req.url!, 'http://localhost');
-    if (
-      req.headers.authorization !== 'Bearer secret-audiomuse-token' ||
-      url.searchParams.get('server') !== 'navidrome'
-    ) {
-      res.writeHead(401).end();
-      return;
-    }
-    if (url.pathname === '/api/similar_tracks') await controls.onSimilarity?.();
-    if (url.pathname === '/api/version') await controls.onVersion?.();
-    if (url.pathname === '/api/servers') await controls.onServers?.();
-    res.setHeader('Content-Type', 'application/json');
-    res.statusCode = controls.fail
-      ? 401
-      : controls.analysisFails && url.pathname === '/api/max_distance'
-        ? 404
-        : 200;
-    res.end(
-      JSON.stringify(
-        controls.fail
-          ? { error: 'secret-audiomuse-token' }
-          : url.pathname === '/api/servers'
-            ? {
-                servers: [
-                  {
-                    server_id: 'navidrome',
-                    name: 'Fixture',
-                    server_type: 'navidrome',
-                    creds: { url: controls.navidromeUrl },
-                  },
-                ],
-              }
-            : url.pathname === '/api/clap/search'
-              ? { results: controls.rows }
-              : url.pathname === '/api/similar_tracks'
-                ? (controls.byReference[url.searchParams.get('item_id')!] ?? controls.rows)
-                : url.pathname === '/api/max_distance'
-                  ? { max_distance: 1 }
-                  : { app_version: controls.version },
-      ),
-    );
-  });
-  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
-  const address = server.address();
-  assert(address && typeof address !== 'string');
-  return {
-    controls,
-    url: `http://127.0.0.1:${address.port}`,
-    async close() {
-      server.closeAllConnections();
-      await new Promise<void>((r) => server.close(() => r()));
-    },
-  };
-}
 
 test('AudioMuse is optional and authenticated connectivity failures do not expose credentials', async (t) => {
   const remote = await navidromeFixture();

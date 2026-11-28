@@ -62,12 +62,13 @@ export async function navidromeFixture() {
         }),
       );
     };
-    const fail = () =>
+    // Subsonic codes: 40 wrong username or password, 70 data not found.
+    const fail = (code = 70) =>
       res.end(
         JSON.stringify({
           'subsonic-response': {
             status: 'failed',
-            error: { code: 70, message: 'secret-password token=secret-token' },
+            error: { code, message: 'secret-password token=secret-token' },
           },
         }),
       );
@@ -80,7 +81,7 @@ export async function navidromeFixture() {
       p.get('t') !== expectedToken ||
       p.get('f') !== 'json'
     ) {
-      fail();
+      fail(40);
       return;
     }
     if (controls.leakError) {
