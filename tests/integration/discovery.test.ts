@@ -1156,7 +1156,7 @@ test('a deployment outside the supported minor release or with a malformed versi
   for (const name of ['check_audiomuse_connection', 'discover_tracks'] as const) {
     const unsupported = await run(name);
     assert.equal(unsupported.status, 'audiomuse_error');
-    assert.match(unsupported.message ?? '', /3\.7\.x.*v3\.7\.4.*v3\.8\.0/);
+    assert.match(unsupported.message ?? '', /3\.7\.x.*v3\.7\.5.*v3\.8\.0/);
   }
   for (const malformed of [
     '3.7.4',
