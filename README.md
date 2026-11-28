@@ -130,7 +130,7 @@ For your MCP client, use `node` as the command with these arguments:
 
 Song lists work on their own. For similarity and description-based
 recommendations, connect a separately installed AudioMuse-AI 3.7.x instance
-(validated on v3.7.4).
+(validated on v3.7.5).
 
 Answer yes when setup asks "Set up AudioMuse recommendations?", then enter
 AudioMuse's URL and API token. Setup checks the token and the release, and finds

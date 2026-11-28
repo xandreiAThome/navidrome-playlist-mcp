@@ -1,7 +1,7 @@
 # AudioMuse discovery
 
 AudioMuse-AI is separately managed; this service does not install models or trigger
-analysis. The adapter supports **3.7.x** releases and is validated against **v3.7.4**;
+analysis. The adapter supports **3.7.x** releases and is validated against **v3.7.5**;
 other minor releases are rejected until validated. Explicit song-list workflows
 remain available when AudioMuse is absent or unavailable.
 

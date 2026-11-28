@@ -192,7 +192,7 @@ test('a server added in AudioMuse is found when the user checks again', async ()
 });
 
 const UNSUPPORTED =
-  'This adapter supports AudioMuse 3.7.x releases, validated against v3.7.4; the deployment runs v3.8.0.';
+  'This adapter supports AudioMuse 3.7.x releases, validated against v3.7.5; the deployment runs v3.8.0.';
 
 test('an unsupported AudioMuse release fails the step with an offer to skip it', async () => {
   audio.controls.version = 'v3.8.0';

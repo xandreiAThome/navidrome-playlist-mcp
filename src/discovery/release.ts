@@ -2,7 +2,7 @@
 // release. Calibration stays valid across patches and is stale across minors:
 // stored calibration records its `releaseMinor`, which discovery compares with the
 // deployment's (see calibration.ts).
-export const supportedAudioMuse = { minor: '3.7', validatedBaseline: 'v3.7.4' } as const;
+export const supportedAudioMuse = { minor: '3.7', validatedBaseline: 'v3.7.5' } as const;
 
 // Canonical digit groups only (no leading zeros), so `major.minor` compares as a string.
 const releasePattern = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
