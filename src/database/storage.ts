@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { mkdirSync, chmodSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -17,9 +17,17 @@ import type {
   Operation,
   ExpansionResult,
   UpdateOperation,
+  Calibration,
+  CalibrationBinding,
+  CalibrationScale,
+  CalibrationRating,
 } from '../playlists/domain.ts';
+import { releaseMinor } from '../discovery/release.ts';
 import { migrate } from './migrate.ts';
 import {
+  calibrations,
+  calibrationScales,
+  calibrationRatings,
   updateOperations,
   identity,
   drafts,
@@ -37,6 +45,25 @@ function operationValues(operation: Operation) {
     phase: operation.phase,
     playlistId: operation.playlistId ?? null,
     recoveryVersion: operation.recoveryVersion,
+  };
+}
+
+function calibrationValue(row: typeof calibrations.$inferSelect): Calibration {
+  return {
+    id: row.id,
+    scale: row.scale,
+    cutoff: row.cutoff,
+    binding: {
+      audiomuseUrl: row.audiomuseUrl,
+      server: row.server,
+      navidromeUrl: row.navidromeUrl,
+      release: row.release,
+      minor: row.releaseMinor,
+    },
+    epoch: row.epoch,
+    savedAt: row.savedAt,
+    ...(row.note === null ? {} : { note: row.note }),
+    ...(row.resetAt === null ? {} : { resetAt: row.resetAt }),
   };
 }
 
@@ -84,6 +111,148 @@ export class Storage {
   }
   private transaction<T>(action: () => T): T {
     return this.connection.transaction(action).immediate();
+  }
+
+  /** The newest saved calibration for a scale, including a reset (stale) one. */
+  currentCalibration(scale: CalibrationScale): Calibration | undefined {
+    const row = this.db
+      .select()
+      .from(calibrations)
+      .where(eq(calibrations.scale, scale))
+      .orderBy(desc(calibrations.id))
+      .limit(1)
+      .get();
+    return row && calibrationValue(row);
+  }
+
+  /** Every saved calibration for a scale, newest first. */
+  calibrationHistory(scale: CalibrationScale): Calibration[] {
+    return this.db
+      .select()
+      .from(calibrations)
+      .where(eq(calibrations.scale, scale))
+      .orderBy(desc(calibrations.id))
+      .all()
+      .map(calibrationValue);
+  }
+
+  /**
+   * Saves a quality cutoff as the scale's current calibration. The current rating
+   * epoch becomes its evidence and later ratings start a new epoch.
+   */
+  saveCalibration(input: {
+    scale: CalibrationScale;
+    cutoff: number;
+    binding: CalibrationBinding;
+    note?: string;
+  }): Calibration {
+    const minor = releaseMinor(input.binding.release);
+    if (!minor) throw new Error(`Invalid AudioMuse release ${input.binding.release}.`);
+    return this.transaction(() => {
+      const epoch = this.ratingEpoch(input.scale);
+      const row = this.db
+        .insert(calibrations)
+        .values({
+          scale: input.scale,
+          cutoff: input.cutoff,
+          audiomuseUrl: input.binding.audiomuseUrl,
+          server: input.binding.server,
+          navidromeUrl: input.binding.navidromeUrl,
+          release: input.binding.release,
+          releaseMinor: minor,
+          epoch,
+          note: input.note ?? null,
+          savedAt: new Date().toISOString(),
+        })
+        .returning()
+        .get();
+      this.advanceRatingEpoch(input.scale, epoch);
+      return calibrationValue(row);
+    });
+  }
+
+  /**
+   * Marks the scale's current calibration stale after an undetectable model or
+   * index change and starts fresh ratings. Returns undefined when none was saved.
+   */
+  resetCalibration(scale: CalibrationScale): Calibration | undefined {
+    return this.transaction(() => {
+      const current = this.currentCalibration(scale);
+      this.advanceRatingEpoch(scale, this.ratingEpoch(scale));
+      if (!current) return undefined;
+      if (current.resetAt) return current;
+      const resetAt = new Date().toISOString();
+      this.db.update(calibrations).set({ resetAt }).where(eq(calibrations.id, current.id)).run();
+      return { ...current, resetAt };
+    });
+  }
+
+  /** Records ratings in the scale's current epoch; re-rating a candidate replaces it. */
+  recordCalibrationRatings(scale: CalibrationScale, ratings: CalibrationRating[]) {
+    this.transaction(() => {
+      const epoch = this.ratingEpoch(scale);
+      const ratedAt = new Date().toISOString();
+      for (const rating of ratings)
+        this.db
+          .insert(calibrationRatings)
+          .values({ ...rating, scale, epoch, ratedAt })
+          .onConflictDoUpdate({
+            target: [
+              calibrationRatings.scale,
+              calibrationRatings.epoch,
+              calibrationRatings.probe,
+              calibrationRatings.itemId,
+            ],
+            set: {
+              title: rating.title,
+              author: rating.author,
+              score: rating.score,
+              rating: rating.rating,
+              ratedAt,
+            },
+          })
+          .run();
+    });
+  }
+
+  /**
+   * Ratings of one epoch in recording order: by default the current epoch, which
+   * a new save will use as evidence; a saved calibration's `epoch` gives its evidence.
+   */
+  calibrationRatings(scale: CalibrationScale, epoch?: number): CalibrationRating[] {
+    return this.db
+      .select({
+        probe: calibrationRatings.probe,
+        itemId: calibrationRatings.itemId,
+        title: calibrationRatings.title,
+        author: calibrationRatings.author,
+        score: calibrationRatings.score,
+        rating: calibrationRatings.rating,
+      })
+      .from(calibrationRatings)
+      .where(
+        and(
+          eq(calibrationRatings.scale, scale),
+          eq(calibrationRatings.epoch, epoch ?? this.ratingEpoch(scale)),
+        ),
+      )
+      .orderBy(sql`rowid`)
+      .all();
+  }
+
+  private ratingEpoch(scale: CalibrationScale) {
+    return (
+      this.db.select().from(calibrationScales).where(eq(calibrationScales.scale, scale)).get()
+        ?.epoch ?? 1
+    );
+  }
+
+  private advanceRatingEpoch(scale: CalibrationScale, epoch: number) {
+    this.db
+      .insert(calibrationScales)
+      .values({ scale, epoch: epoch + 1 })
+      .onConflictDoUpdate({ target: calibrationScales.scale, set: { epoch: epoch + 1 } })
+      .run();
   }
 
   getDraft(id: string, revision?: number): Draft {

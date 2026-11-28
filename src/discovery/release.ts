@@ -1,8 +1,7 @@
 // AudioMuse releases this adapter supports: any patch of one validated minor
-// release. Calibration stays valid across patches and is stale across minors.
-// With a single supported minor, config and the deployment check each reject other
-// minors, so no calibration/deployment comparison is needed; supporting a second
-// minor would reintroduce a `releaseMinor` comparison in discovery.
+// release. Calibration stays valid across patches and is stale across minors:
+// stored calibration records its `releaseMinor`, which discovery compares with the
+// deployment's (see calibration.ts).
 export const supportedAudioMuse = { minor: '3.7', validatedBaseline: 'v3.7.4' } as const;
 
 // Canonical digit groups only (no leading zeros), so `major.minor` compares as a string.

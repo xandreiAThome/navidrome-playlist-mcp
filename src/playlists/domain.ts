@@ -42,6 +42,43 @@ export type Config = {
   searchPageSize: number;
   searchMaxPages: number;
 };
+/** A recommendation scale, calibrated, saved, and reset independently. */
+export type CalibrationScale = 'similarity' | 'description';
+export type CalibrationVerdict = 'good' | 'poor';
+/** What a calibration was measured against; a change to any field makes it stale. */
+export type CalibrationBinding = {
+  audiomuseUrl: string;
+  server: string;
+  navidromeUrl: string;
+  /** The AudioMuse release, e.g. `v3.7.4`; only its minor release is binding. */
+  release: string;
+};
+/** A saved quality cutoff for one scale. The newest one per scale is current. */
+export type Calibration = {
+  id: number;
+  scale: CalibrationScale;
+  /** Similarity: the maximum distance. Description: the minimum similarity. */
+  cutoff: number;
+  binding: CalibrationBinding & { minor: string };
+  /** The rating epoch whose ratings are this calibration's evidence. */
+  epoch: number;
+  savedAt: string;
+  /** Recorded instead of ratings, e.g. for cutoffs moved from a calibration file. */
+  note?: string;
+  /** Set when the user reset the scale after an undetectable model or index change. */
+  resetAt?: string;
+};
+/** One candidate for a calibration probe, rated good or poor by the user. */
+export type CalibrationRating = {
+  /** A library track ID (similarity) or listening description (description). */
+  probe: string;
+  itemId: string;
+  title: string;
+  author: string;
+  /** The candidate's distance (similarity) or similarity (description). */
+  score: number;
+  rating: CalibrationVerdict;
+};
 export type ProblemCode =
   | 'target_changed'
   | 'audiomuse_unavailable'

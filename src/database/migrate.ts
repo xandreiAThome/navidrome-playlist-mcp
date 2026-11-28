@@ -14,6 +14,7 @@ export function migrate(database: Database.Database) {
         '0002_operation_state.sql',
         '0003_discovery.sql',
         '0004_updates.sql',
+        '0005_calibration.sql',
       ];
       if ((current.version ?? 0) > files.length)
         throw new Error('Database schema is newer than this application.');

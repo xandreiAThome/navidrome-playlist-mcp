@@ -17,7 +17,7 @@ export function createApp(config: Config): PlaylistService {
       navidrome,
       new Publication(storage, navidrome, config),
       audiomuse,
-      new Discovery(config.audiomuse, audiomuse, navidrome, storage),
+      new Discovery(config.audiomuse, audiomuse, navidrome, storage, config.url),
       new Updates(storage, navidrome, config),
     );
   } catch (error) {

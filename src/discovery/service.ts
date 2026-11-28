@@ -10,9 +10,11 @@ import type {
   ToolInput,
   ExpansionResult,
   Draft,
+  CalibrationScale,
 } from '../playlists/domain.ts';
 import type { Navidrome } from '../navidrome/client.ts';
 import type { AudioMuse } from './audiomuse.ts';
+import { calibrationChanges } from './calibration.ts';
 
 const rowSchema = z.object({
   item_id: z.string().min(1).max(500),
@@ -41,23 +43,48 @@ export class Discovery {
     private readonly audiomuse: AudioMuse,
     private readonly navidrome: Navidrome,
     private readonly storage: Storage,
+    private readonly navidromeUrl: string,
   ) {}
 
-  private async start() {
+  /**
+   * Checks the deployment and returns the scale's quality cutoff, or reports
+   * `calibration_required` when the scale is missing or stale.
+   */
+  private async start(scale: CalibrationScale) {
     if (!this.config)
       throw new Problem('audiomuse_unavailable', 'Configure AudioMuse to use discovery.');
-    const calibration = this.config.calibration;
+    const file = this.config.calibration;
+    // The calibration file applies only until the scale is saved in storage; config
+    // loading already checked it against the supported minor.
+    const calibration =
+      this.storage.currentCalibration(scale) ??
+      (file && {
+        cutoff: scale === 'similarity' ? file.maxDistance : file.minDescriptionSimilarity,
+      });
     if (!calibration)
       throw new Problem(
         'calibration_required',
-        'Discovery requires a calibration report and quality thresholds for this deployment and index/model.',
+        `Calibrate the ${scale} scale before using it for recommendations.`,
+        { scale, reason: 'missing' },
       );
     const signal = AbortSignal.timeout(this.config.budgetMs);
-    // Config and the deployment check each accept only the single supported minor,
-    // so a loaded calibration always matches the deployment's minor release.
-    await this.audiomuse.supportedVersion(signal);
+    const release = await this.audiomuse.supportedVersion(signal);
     await this.audiomuse.verifyServer(signal);
-    return { signal, calibration };
+    if ('binding' in calibration) {
+      const changes = calibrationChanges(calibration, {
+        audiomuseUrl: this.config.url,
+        server: this.config.server,
+        navidromeUrl: this.navidromeUrl,
+        release,
+      });
+      if (changes.length)
+        throw new Problem(
+          'calibration_required',
+          `The ${scale} calibration is stale for this deployment; recalibrate the ${scale} scale.`,
+          { scale, reason: 'stale', changes },
+        );
+    }
+    return { signal, cutoff: calibration.cutoff };
   }
 
   private async validate(
@@ -280,7 +307,7 @@ export class Discovery {
         ? source.entries
         : source.entries.filter((entry) => !entry.recommendation || entry.recommendation.retained);
     const capacity = Math.max(0, 500 - base.length);
-    const { signal, calibration } = await this.start();
+    const { signal, cutoff } = await this.start('similarity');
     const result = await this.recommend(
       references,
       Math.min(target, capacity),
@@ -288,7 +315,7 @@ export class Discovery {
       originals,
       input.allowAlternateVersions,
       signal,
-      calibration.maxDistance,
+      cutoff,
     );
     if (signal.aborted)
       throw new Problem(
@@ -356,7 +383,7 @@ export class Discovery {
         : source.entries.filter((e) => !e.recommendation || e.recommendation.retained);
     const target = input.count ?? Math.min(20, references.length);
     const capacity = Math.max(0, 500 - base.length);
-    const { signal, calibration } = await this.start();
+    const { signal, cutoff } = await this.start('similarity');
     const result = await this.recommend(
       references,
       Math.min(target, capacity),
@@ -368,7 +395,7 @@ export class Discovery {
       [...references, ...base.flatMap((e) => (e.track && !e.omit ? [e.track] : []))],
       input.allowAlternateVersions,
       signal,
-      calibration.maxDistance,
+      cutoff,
     );
     if (signal.aborted)
       throw new Problem('discovery_timeout', 'Discovery deadline exhausted; draft unchanged.');
@@ -410,7 +437,7 @@ export class Discovery {
     count: number,
     allowAlternateVersions: boolean,
   ): Promise<DiscoveryResult> {
-    const { signal, calibration } = await this.start();
+    const { signal, cutoff } = await this.start('similarity');
     const reference = await this.navidrome.getSong(trackId, signal);
     return this.recommend(
       [reference],
@@ -419,12 +446,12 @@ export class Discovery {
       [reference],
       allowAlternateVersions,
       signal,
-      calibration.maxDistance,
+      cutoff,
     );
   }
 
   async describe(description: string, count: number): Promise<DiscoveryResult> {
-    const { signal, calibration } = await this.start();
+    const { signal, cutoff } = await this.start('description');
     const body = await this.audiomuse.request('/api/clap/search', signal, {
       query: description,
       limit: 200,
@@ -440,7 +467,7 @@ export class Discovery {
     const recommendations: RecommendedTrack[] = [];
     const seen = new Set<string>();
     for (const row of parsed.data.results.sort((a, b) => b.similarity - a.similarity)) {
-      if (row.similarity < calibration.minDescriptionSimilarity || seen.has(row.item_id)) continue;
+      if (row.similarity < cutoff || seen.has(row.item_id)) continue;
       recommendations.push(await this.validate(row, signal, 'description'));
       seen.add(row.item_id);
       if (recommendations.length === count) break;
