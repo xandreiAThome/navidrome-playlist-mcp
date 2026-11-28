@@ -96,6 +96,18 @@ const tools: { name: ToolName; readOnly: boolean; description: string }[] = [
       "Record the user's good or poor calibration ratings for one probe, echoing each candidate's trackId, title, artist, and score as collected. Ratings are trusted as the user's own judgment; record only what the user said after listening. Re-rating a candidate replaces its rating. Returns the scale's ratings collected toward the next calibration. Local only.",
   },
   {
+    name: 'propose_calibration',
+    readOnly: true,
+    description:
+      'Propose a quality cutoff for one scale from its recorded ratings without saving it. Similarity: the largest good distance below the smallest poor distance; description: the smallest good similarity above the largest poor similarity; cutoffs are inclusive. Needs at least one good and one poor rating across at least three probes; when the result is insufficient, collect candidates further down the list or for another probe and propose again. Show the user which rated candidates the cutoff accepts and rejects, and save it only after they agree. Local only.',
+  },
+  {
+    name: 'save_calibration',
+    readOnly: false,
+    description:
+      'Save a quality cutoff for one scale, bound to the live AudioMuse URL, selected server, Navidrome URL, and release. With evidence "ratings", save exactly the cutoff propose_calibration returned after the user agreed; it is rejected if the proposal changed. With evidence "note", save an explicit cutoff without ratings, such as one moved from an old calibration file, recording where it came from in note. Later ratings start fresh. Afterwards, suggest (do not require) testing recommendations for a probe the user has not rated.',
+  },
+  {
     name: 'discover_tracks',
     readOnly: true,
     description:
@@ -199,6 +211,7 @@ export function createMcpServer(service: PlaylistService): McpServer {
             'preview_playlist',
             'reset_calibration',
             'record_calibration_ratings',
+            'propose_calibration',
           ].includes(tool.name),
         },
       },

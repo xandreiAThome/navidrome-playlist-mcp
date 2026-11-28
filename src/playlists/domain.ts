@@ -75,6 +75,8 @@ export type CalibrationStatus =
   | { state: 'missing' }
   | { state: 'calibrated'; cutoff: number }
   | { state: 'stale'; cutoff: number; changes: CalibrationChange[] };
+/** What a proposal still needs before it can propose a quality cutoff. */
+export type CalibrationNeed = 'probes' | 'good' | 'poor' | 'separation';
 /** One candidate for a calibration probe, rated good or poor by the user. */
 export type CalibrationRating = {
   /** A library track ID (similarity) or listening description (description). */
@@ -423,6 +425,20 @@ export const toolSchemas = {
         .max(200),
     })
     .strict(),
+  propose_calibration: z.object({ scale: calibrationScaleSchema }).strict(),
+  save_calibration: z
+    .object({
+      scale: calibrationScaleSchema,
+      cutoff: z.number().finite(),
+      /**
+       * `ratings`: the cutoff proposed from the scale's ratings. `note`: an explicit
+       * cutoff saved without ratings, e.g. moved from a calibration file, with `note`
+       * recording why.
+       */
+      evidence: z.enum(['ratings', 'note']),
+      note: z.string().trim().min(1).max(1000).optional(),
+    })
+    .strict(),
   check_connection: z.object({}).strict(),
   search_tracks: z.object({ query: text }).strict(),
   resolve_tracks: z.object({ songs: z.array(requestedSongSchema).min(1).max(500) }).strict(),
@@ -495,6 +511,25 @@ export type ToolData = {
     nextOffset?: number;
   };
   record_calibration_ratings: { scale: CalibrationScale; ratings: CalibrationRating[] };
+  propose_calibration: { scale: CalibrationScale; probes: number; good: number; poor: number } & (
+    | { state: 'insufficient'; needs: CalibrationNeed[]; message: string }
+    | {
+        state: 'proposed';
+        cutoff: number;
+        /** Rated candidates the cutoff offers, closest first. */
+        accepted: CalibrationRating[];
+        /** Rated candidates the cutoff withholds, closest first. */
+        rejected: CalibrationRating[];
+      }
+  );
+  save_calibration: {
+    scale: CalibrationScale;
+    state: 'calibrated';
+    cutoff: number;
+    savedAt: string;
+    note?: string;
+    suggestion: string;
+  };
   check_connection: { connected: boolean };
   search_tracks: { tracks: Track[]; complete: boolean };
   resolve_tracks: { resolutions: Resolution[] };

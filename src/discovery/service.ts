@@ -16,7 +16,7 @@ import type {
 } from '../playlists/domain.ts';
 import type { Navidrome } from '../navidrome/client.ts';
 import type { AudioMuse } from './audiomuse.ts';
-import { calibrationChanges } from './calibration.ts';
+import { calibrationChanges, meetsCutoff, proposeCutoff } from './calibration.ts';
 
 const rowSchema = z.object({
   item_id: z.string().min(1).max(500),
@@ -140,6 +140,73 @@ export class Discovery {
     return { scale, state: 'stale', cutoff: calibration.cutoff, resetAt: calibration.resetAt };
   }
 
+  /** Proposes a quality cutoff from the scale's ratings toward its next calibration. */
+  propose(scale: CalibrationScale): ToolData['propose_calibration'] {
+    return proposeCutoff(scale, this.storage.calibrationRatings(scale));
+  }
+
+  /**
+   * Saves a scale's quality cutoff bound to the live deployment: either the cutoff
+   * currently proposed from its ratings, or an explicit cutoff with a recorded note.
+   */
+  async save(input: ToolInput<'save_calibration'>): Promise<ToolData['save_calibration']> {
+    const { scale, cutoff, evidence, note } = input;
+    if (evidence === 'note' && !note)
+      throw new Problem(
+        'invalid_input',
+        'Record a note explaining where an explicit cutoff came from when saving without ratings.',
+      );
+    if (evidence === 'ratings' && note)
+      throw new Problem(
+        'invalid_input',
+        'A note is only recorded for an explicit cutoff; use evidence "note" to save one.',
+      );
+    if (scale === 'similarity' && cutoff < 0)
+      throw new Problem(
+        'invalid_input',
+        'A similarity cutoff is a distance and cannot be negative.',
+      );
+    const { release } = await this.connect();
+    if (evidence === 'ratings') {
+      const proposal = this.propose(scale);
+      if (proposal.state !== 'proposed' || proposal.cutoff !== cutoff)
+        throw new Problem(
+          'invalid_input',
+          'Save only the cutoff currently proposed from the ratings; propose again and show the user its accepted and rejected candidates.',
+          {
+            scale,
+            proposal:
+              proposal.state === 'proposed'
+                ? { state: proposal.state, cutoff: proposal.cutoff }
+                : { state: proposal.state, needs: proposal.needs },
+          },
+        );
+    }
+    const saved = this.storage.saveCalibration({
+      scale,
+      cutoff,
+      binding: {
+        audiomuseUrl: this.config!.url,
+        server: this.config!.server,
+        navidromeUrl: this.navidromeUrl,
+        release,
+      },
+      ...(evidence === 'note' ? { note } : {}),
+    });
+    return {
+      scale,
+      state: 'calibrated',
+      cutoff: saved.cutoff,
+      savedAt: saved.savedAt,
+      ...(saved.note ? { note: saved.note } : {}),
+      suggestion: `Optionally check the cutoff with a probe the user has not rated: ${
+        scale === 'similarity'
+          ? 'find_similar_tracks for another library track'
+          : 'discover_tracks for another listening description'
+      }, and recalibrate if the user disagrees with the results.`,
+    };
+  }
+
   private async validate(
     row: Row,
     signal: AbortSignal,
@@ -239,7 +306,8 @@ export class Discovery {
       for (const [index, queue] of queues.entries()) {
         while (queue.length) {
           const row = queue.shift()!;
-          if (seen.has(row.item_id) || row.distance! > maxDistance) continue;
+          if (seen.has(row.item_id) || !meetsCutoff('similarity', row.distance!, maxDistance))
+            continue;
           const base = recordingTitle(row.title);
           const sameTitle = originals.filter((original) => recordingTitle(original.title) === base);
           if (
@@ -509,7 +577,7 @@ export class Discovery {
     const recommendations: RecommendedTrack[] = [];
     const seen = new Set<string>();
     for (const row of results) {
-      if (row.similarity < cutoff || seen.has(row.item_id)) continue;
+      if (!meetsCutoff('description', row.similarity, cutoff) || seen.has(row.item_id)) continue;
       recommendations.push(await this.validate(row, signal, 'description'));
       seen.add(row.item_id);
       if (recommendations.length === count) break;

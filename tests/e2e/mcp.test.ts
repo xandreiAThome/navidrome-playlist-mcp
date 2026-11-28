@@ -44,6 +44,8 @@ test('a local MCP client discovers tools and completes a previewed playlist work
       'reset_calibration',
       'collect_calibration_candidates',
       'record_calibration_ratings',
+      'propose_calibration',
+      'save_calibration',
       'discover_tracks',
       'find_similar_tracks',
       'expand_playlist_draft',

@@ -60,6 +60,8 @@ export class PlaylistService {
         );
         return { scale, ratings: storage.calibrationRatings(scale) };
       },
+      propose_calibration: ({ scale }) => discovery.propose(scale),
+      save_calibration: (value) => discovery.save(value),
       check_connection: () => navidrome.ping(),
       search_tracks: ({ query }) => navidrome.search(query),
       resolve_tracks: async ({ songs }) => {

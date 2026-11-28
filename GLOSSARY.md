@@ -112,5 +112,9 @@ The user's judgment that one candidate for a calibration probe is a good or poor
 The limit a recommended track's score must meet to be offered: the similarity cutoff (a maximum distance) or the description cutoff (a minimum similarity). Recommendations that miss it are reported as a shortfall, never substituted.
 _Avoid_: Threshold, quality floor
 
+**Proposed cutoff**:
+The quality cutoff a scale's calibration ratings support, shown with the rated candidates it accepts and rejects before the user agrees to save it. It needs at least one good and one poor rating across at least three probes; otherwise more candidates are collected further down the list. A cutoff moved from elsewhere is saved instead with a recorded note in place of ratings.
+_Avoid_: Suggested threshold
+
 **Stale calibration**:
 A calibration that no longer applies because the AudioMuse deployment, selected server, Navidrome URL, or minor release changed, or because the user reset it after a model or index change.

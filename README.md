@@ -192,6 +192,8 @@ appends to an existing one. Recovery tools can also complete remote writes.
 | `expand_playlist_update`         | Recommend additions using an update's reference songs.          |
 | `collect_calibration_candidates` | Collect candidates with raw scores for a calibration probe.     |
 | `record_calibration_ratings`     | Record good or poor ratings of calibration candidates.          |
+| `propose_calibration`            | Propose a quality cutoff from ratings and show what it accepts. |
+| `save_calibration`               | Save a proposed cutoff, or an explicit cutoff with a note.      |
 
 Discovery and recommendation generation require the optional AudioMuse setup
 described above. Reference and retention choices are saved locally.
