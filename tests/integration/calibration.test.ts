@@ -6,7 +6,7 @@ import { audioMuseFixture } from '../support/audiomuse.ts';
 import { createApp } from '../../src/app.ts';
 import type { CalibrationBinding, CalibrationScale } from '../../src/playlists/domain.ts';
 
-/** A Navidrome and AudioMuse pair with AudioMuse configured but no calibration file. */
+/** A Navidrome and AudioMuse pair with AudioMuse configured but not yet calibrated. */
 async function discoveryFixture(t: { onTestFinished(fn: () => unknown): void }) {
   const remote = await navidromeFixture();
   const audio = await audioMuseFixture();

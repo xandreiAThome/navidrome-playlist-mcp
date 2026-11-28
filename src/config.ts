@@ -1,11 +1,9 @@
 import { posix, win32 } from 'node:path';
-import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { z } from 'zod';
 import { baseUrlFault } from './base-url.ts';
 import { Problem } from './playlists/domain.ts';
 import type { Config } from './playlists/domain.ts';
-import { isSupportedRelease, releaseMinor, supportedReleaseMessage } from './discovery/release.ts';
 
 const optionalSetting = <T extends z.ZodType>(schema: T) =>
   z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
@@ -47,7 +45,6 @@ export function loadConfig(
       AUDIOMUSE_API_TOKEN: optionalSetting(z.string().trim().min(1)),
       AUDIOMUSE_SERVER: optionalSetting(z.string().trim().min(1).max(500)),
       AUDIOMUSE_BUDGET_MS: z.coerce.number().int().min(100).max(300000).default(60000),
-      AUDIOMUSE_CALIBRATION_PATH: optionalSetting(z.string().min(1)),
     })
     .safeParse(env);
   if (!parsed.success)
@@ -57,12 +54,9 @@ export function loadConfig(
     );
   const value = parsed.data;
   let audiomuse: Config['audiomuse'];
-  if (
-    value.AUDIOMUSE_URL ||
-    value.AUDIOMUSE_API_TOKEN ||
-    value.AUDIOMUSE_SERVER ||
-    value.AUDIOMUSE_CALIBRATION_PATH
-  ) {
+  // The former AUDIOMUSE_CALIBRATION_PATH is ignored: calibration lives in local
+  // storage, and file cutoffs move there once through save_calibration.
+  if (value.AUDIOMUSE_URL || value.AUDIOMUSE_API_TOKEN || value.AUDIOMUSE_SERVER) {
     if (!value.AUDIOMUSE_URL || !value.AUDIOMUSE_API_TOKEN || !value.AUDIOMUSE_SERVER)
       throw new Problem(
         'configuration_error',
@@ -80,45 +74,6 @@ export function loadConfig(
       server: value.AUDIOMUSE_SERVER,
       budgetMs: value.AUDIOMUSE_BUDGET_MS,
     };
-    if (value.AUDIOMUSE_CALIBRATION_PATH) {
-      try {
-        const calibration = z
-          .object({
-            audiomuseUrl: z.url(),
-            navidromeUrl: z.url(),
-            server: z.string().min(1),
-            version: z.string(),
-            indexModel: z.string().min(1),
-            report: z.string().min(1),
-            maxDistance: z.number().finite().nonnegative(),
-            minDescriptionSimilarity: z.number().finite().min(-1).max(1),
-          })
-          .parse(JSON.parse(readFileSync(value.AUDIOMUSE_CALIBRATION_PATH, 'utf8')));
-        if (
-          calibration.audiomuseUrl.replace(/\/$/, '') !== audiomuse.url ||
-          calibration.navidromeUrl.replace(/\/$/, '') !== value.NAVIDROME_URL.replace(/\/$/, '') ||
-          calibration.server !== audiomuse.server
-        )
-          throw new Error('Calibration belongs to another deployment');
-        if (releaseMinor(calibration.version) === undefined)
-          throw new Problem(
-            'configuration_error',
-            `The AudioMuse calibration records an invalid version ${JSON.stringify(calibration.version)}; expected vMAJOR.MINOR.PATCH. ${supportedReleaseMessage}; the calibration must be redone on a supported release.`,
-          );
-        if (!isSupportedRelease(calibration.version))
-          throw new Problem(
-            'configuration_error',
-            `The AudioMuse calibration was made on ${calibration.version}. ${supportedReleaseMessage}; calibration from another minor release is stale and must be redone.`,
-          );
-        audiomuse.calibration = calibration;
-      } catch (error) {
-        if (error instanceof Problem) throw error;
-        throw new Problem(
-          'configuration_error',
-          'The AudioMuse calibration file must be valid and belong to this deployment, Navidrome URL, and selected server.',
-        );
-      }
-    }
   }
   const url = new URL(value.NAVIDROME_URL);
   if (baseUrlFault(url))

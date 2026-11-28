@@ -25,13 +25,6 @@ export type Config = {
     token: string;
     server: string;
     budgetMs: number;
-    calibration?: {
-      version: string;
-      indexModel: string;
-      report: string;
-      maxDistance: number;
-      minDescriptionSimilarity: number;
-    };
   };
   url: string;
   username: string;

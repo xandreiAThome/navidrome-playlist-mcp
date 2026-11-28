@@ -65,7 +65,7 @@ export class Discovery {
   private async start(scale: CalibrationScale) {
     if (!this.config)
       throw new Problem('audiomuse_unavailable', 'Configure AudioMuse to use discovery.');
-    if (!this.calibration(scale))
+    if (!this.storage.currentCalibration(scale))
       throw new Problem(
         'calibration_required',
         `Calibrate the ${scale} scale before using it for recommendations.`,
@@ -88,25 +88,9 @@ export class Discovery {
     return { signal, cutoff: status.cutoff };
   }
 
-  /**
-   * The scale's stored calibration, else its cutoff from the calibration file, which
-   * applies only until the scale is saved in storage; config loading already checked
-   * the file against the supported minor.
-   */
-  private calibration(scale: CalibrationScale) {
-    const file = this.config?.calibration;
-    return (
-      this.storage.currentCalibration(scale) ??
-      (file && {
-        cutoff: scale === 'similarity' ? file.maxDistance : file.minDescriptionSimilarity,
-      })
-    );
-  }
-
   private calibrationStatus(scale: CalibrationScale, release: string): CalibrationStatus {
-    const calibration = this.calibration(scale);
+    const calibration = this.storage.currentCalibration(scale);
     if (!calibration || !this.config) return { state: 'missing' };
-    if (!('binding' in calibration)) return { state: 'calibrated', cutoff: calibration.cutoff };
     const changes = calibrationChanges(calibration, {
       audiomuseUrl: this.config.url,
       server: this.config.server,

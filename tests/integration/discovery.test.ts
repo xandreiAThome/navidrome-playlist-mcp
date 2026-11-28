@@ -44,13 +44,28 @@ test('AudioMuse is optional and authenticated connectivity failures do not expos
   assert(!JSON.stringify(result).includes('secret-audiomuse-token'));
 });
 
-const calibration = {
+/** The shape operators kept in the calibration file before calibration moved into local storage. */
+const formerCalibrationFile = {
   version: 'v3.7.1',
   indexModel: 'fixture-only',
   report: 'synthetic policy test; not live calibration',
   maxDistance: 0.3,
   minDescriptionSimilarity: 0.7,
 };
+
+/** Saves both quality cutoffs through the public save path, as moved from a calibration file. */
+async function calibrate(service: ReturnType<typeof createApp>) {
+  for (const [scale, cutoff] of [
+    ['similarity', formerCalibrationFile.maxDistance],
+    ['description', formerCalibrationFile.minDescriptionSimilarity],
+  ] as const)
+    await ok(service, 'save_calibration', {
+      scale,
+      cutoff,
+      evidence: 'note',
+      note: 'synthetic policy test; not live calibration',
+    });
+}
 
 async function ok<T>(
   service: ReturnType<typeof createApp>,
@@ -77,11 +92,11 @@ test('description discovery applies its quality floor, validates library identit
       token: 'secret-audiomuse-token',
       server: 'navidrome',
       budgetMs: 60000,
-      calibration,
     },
   };
   const service = createApp(config);
   t.onTestFinished(() => service.close());
+  await calibrate(service);
   audio.controls.rows = [
     {
       item_id: 'other',
@@ -121,13 +136,9 @@ test('description discovery applies its quality floor, validates library identit
     (await service.execute('discover_tracks', { description: 'evening' })).status,
     'library_changed',
   );
-  const uncalibrated = createApp({
-    ...config,
-    audiomuse: { ...config.audiomuse, calibration: undefined },
-  });
-  t.onTestFinished(() => uncalibrated.close());
+  await ok(service, 'reset_calibration', { scale: 'description' });
   assert.equal(
-    (await uncalibrated.execute('discover_tracks', { description: 'evening' })).status,
+    (await service.execute('discover_tracks', { description: 'evening' })).status,
     'calibration_required',
   );
 });
@@ -147,10 +158,10 @@ test('single-track similarity proves reference availability and reports ambiguou
       token: 'secret-audiomuse-token',
       server: 'navidrome',
       budgetMs: 60000,
-      calibration,
     },
   });
   t.onTestFinished(() => service.close());
+  await calibrate(service);
   audio.controls.rows = [
     {
       item_id: 'other',
@@ -215,11 +226,11 @@ test('expansion balances distinct originals, preserves occurrences, and replays 
       token: 'secret-audiomuse-token',
       server: 'navidrome',
       budgetMs: 60000,
-      calibration,
     },
   };
   let service = createApp(config);
   t.onTestFinished(() => service.close());
+  await calibrate(service);
   const draft = await ok<Draft>(service, 'save_playlist_draft', {
     name: 'Mixed',
     entries: [
@@ -282,11 +293,11 @@ test('retained recommendations and explicit reference choices survive regenerati
       token: 'secret-audiomuse-token',
       server: 'navidrome',
       budgetMs: 60000,
-      calibration,
     },
   };
   let service = createApp(config);
   t.onTestFinished(() => service.close());
+  await calibrate(service);
   const original = await ok<Draft>(service, 'save_playlist_draft', {
     name: 'Protected',
     entries: [{ request: { title: 'Hallelujah', artist: 'Jeff Buckley' }, trackId: 'studio' }],
@@ -352,7 +363,7 @@ test('retained recommendations and explicit reference choices survive regenerati
 test('a wrong AudioMuse media-server binding fails before recommendations can be selected', async (t) => {
   const remote = await navidromeFixture();
   const audio = await audioMuseFixture();
-  audio.controls.navidromeUrl = 'https://wrong.example';
+  audio.controls.navidromeUrl = remote.config.url;
   t.onTestFinished(async () => {
     await remote.close();
     await audio.close();
@@ -364,10 +375,11 @@ test('a wrong AudioMuse media-server binding fails before recommendations can be
       token: 'secret-audiomuse-token',
       server: 'navidrome',
       budgetMs: 60000,
-      calibration,
     },
   });
   t.onTestFinished(() => service.close());
+  await calibrate(service);
+  audio.controls.navidromeUrl = 'https://wrong.example';
   assert.equal(
     (await service.execute('discover_tracks', { description: 'jazz' })).status,
     'configuration_error',
@@ -375,6 +387,36 @@ test('a wrong AudioMuse media-server binding fails before recommendations can be
 });
 
 test('environment configuration enables AudioMuse without embedding credentials in tool arguments', async (t) => {
+  const { loadConfig } = await import('../../src/config.ts');
+  const remote = await navidromeFixture();
+  const audio = await audioMuseFixture();
+  audio.controls.navidromeUrl = remote.config.url;
+  t.onTestFinished(async () => {
+    await remote.close();
+    await audio.close();
+  });
+  const config = loadConfig({
+    NAVIDROME_URL: remote.config.url,
+    NAVIDROME_USERNAME: 'tester',
+    NAVIDROME_PASSWORD: 'secret-password',
+    NAVIDROME_DB_PATH: remote.config.databasePath,
+    AUDIOMUSE_URL: audio.url,
+    AUDIOMUSE_API_TOKEN: 'secret-audiomuse-token',
+    AUDIOMUSE_SERVER: 'navidrome',
+  });
+  const service = createApp(config);
+  t.onTestFinished(() => service.close());
+  assert.deepEqual(await service.execute('check_audiomuse_connection', {}), {
+    status: 'ok',
+    data: {
+      connected: true,
+      version: 'v3.7.4',
+      calibration: { similarity: { state: 'missing' }, description: { state: 'missing' } },
+    },
+  });
+});
+
+test('cutoffs from a former calibration file move once into local storage through a recorded note', async (t) => {
   const { loadConfig } = await import('../../src/config.ts');
   const { writeFile } = await import('node:fs/promises');
   const { join } = await import('node:path');
@@ -389,13 +431,13 @@ test('environment configuration enables AudioMuse without embedding credentials 
   await writeFile(
     calibrationPath,
     JSON.stringify({
-      ...calibration,
+      ...formerCalibrationFile,
       audiomuseUrl: audio.url,
       navidromeUrl: remote.config.url,
       server: 'navidrome',
     }),
   );
-  const config = loadConfig({
+  const env = {
     NAVIDROME_URL: remote.config.url,
     NAVIDROME_USERNAME: 'tester',
     NAVIDROME_PASSWORD: 'secret-password',
@@ -404,20 +446,53 @@ test('environment configuration enables AudioMuse without embedding credentials 
     AUDIOMUSE_API_TOKEN: 'secret-audiomuse-token',
     AUDIOMUSE_SERVER: 'navidrome',
     AUDIOMUSE_CALIBRATION_PATH: calibrationPath,
-  });
-  const service = createApp(config);
+  };
+  // The former setting no longer loads the file, nor fails startup.
+  const config = loadConfig(env);
+  assert.deepEqual(config, loadConfig({ ...env, AUDIOMUSE_CALIBRATION_PATH: undefined }));
+  let service = createApp(config);
   t.onTestFinished(() => service.close());
-  assert.deepEqual(await service.execute('check_audiomuse_connection', {}), {
-    status: 'ok',
-    data: {
-      connected: true,
-      version: 'v3.7.4',
-      calibration: {
-        similarity: { state: 'calibrated', cutoff: 0.3 },
-        description: { state: 'calibrated', cutoff: 0.7 },
-      },
-    },
+  const status = async () =>
+    (await ok<{ calibration: Record<string, unknown> }>(service, 'check_audiomuse_connection', {}))
+      .calibration;
+  assert.deepEqual(await status(), {
+    similarity: { state: 'missing' },
+    description: { state: 'missing' },
   });
+  assert.equal(
+    (await service.execute('discover_tracks', { description: 'jazz' })).status,
+    'calibration_required',
+  );
+  for (const [scale, cutoff] of [
+    ['similarity', formerCalibrationFile.maxDistance],
+    ['description', formerCalibrationFile.minDescriptionSimilarity],
+  ] as const)
+    await ok(service, 'save_calibration', {
+      scale,
+      cutoff,
+      evidence: 'note',
+      note: `Moved from the calibration file made on ${formerCalibrationFile.version}`,
+    });
+  service.close();
+  service = createApp(config);
+  assert.deepEqual(await status(), {
+    similarity: { state: 'calibrated', cutoff: 0.3 },
+    description: { state: 'calibrated', cutoff: 0.7 },
+  });
+});
+
+test('a former calibration path is ignored even without AudioMuse configured', async (t) => {
+  const { loadConfig } = await import('../../src/config.ts');
+  const remote = await navidromeFixture();
+  t.onTestFinished(() => remote.close());
+  const config = loadConfig({
+    NAVIDROME_URL: remote.config.url,
+    NAVIDROME_USERNAME: 'tester',
+    NAVIDROME_PASSWORD: 'secret-password',
+    NAVIDROME_DB_PATH: remote.config.databasePath,
+    AUDIOMUSE_CALIBRATION_PATH: '/nonexistent/audiomuse-calibration.json',
+  });
+  assert.equal(config.audiomuse, undefined);
 });
 
 test('expansion cannot overwrite a concurrent edit or apply partial additions after its overall deadline', async (t) => {
@@ -435,11 +510,11 @@ test('expansion cannot overwrite a concurrent edit or apply partial additions af
       token: 'secret-audiomuse-token',
       server: 'navidrome',
       budgetMs: 60000,
-      calibration,
     },
   };
   const service = createApp(config);
   t.onTestFinished(() => service.close());
+  await calibrate(service);
   const entries = [{ request: { title: 'Hallelujah', artist: 'Jeff Buckley' }, trackId: 'studio' }];
   const draft = await ok<Draft>(service, 'save_playlist_draft', { name: 'Concurrent', entries });
   let release!: () => void;
@@ -538,7 +613,6 @@ test('empty optional AudioMuse environment settings preserve explicit-list opera
       AUDIOMUSE_URL: '',
       AUDIOMUSE_API_TOKEN: '',
       AUDIOMUSE_SERVER: '',
-      AUDIOMUSE_CALIBRATION_PATH: '',
     }),
   );
   t.onTestFinished(() => service.close());
@@ -564,10 +638,10 @@ test('unresolved originals block expansion, explicit reference exclusion keeps o
       token: 'secret-audiomuse-token',
       server: 'navidrome',
       budgetMs: 60000,
-      calibration,
     },
   });
   t.onTestFinished(() => service.close());
+  await calibrate(service);
   const unresolved = await ok<Draft>(service, 'save_playlist_draft', {
     name: 'Unresolved',
     entries: [{ request: { title: 'Unknown', artist: 'Nobody' } }],
@@ -714,10 +788,10 @@ test('update discovery uses reference-only songs and excludes the target without
       token: 'secret-audiomuse-token',
       server: 'navidrome',
       budgetMs: 60000,
-      calibration,
     },
   });
   t.onTestFinished(() => app.close());
+  await calibrate(app);
   const draft = await ok<Draft>(app, 'save_playlist_update', {
     playlistId: 'target',
     entries: [],
@@ -775,10 +849,10 @@ test('update refresh removes even retained target recommendations while preservi
       token: 'secret-audiomuse-token',
       server: 'navidrome',
       budgetMs: 60000,
-      calibration,
     },
   });
   t.onTestFinished(() => app.close());
+  await calibrate(app);
   const supplied = { request: { title: 'Hallelujah', artist: 'Jeff Buckley' }, trackId: 'studio' };
   const references = [
     { request: { title: 'Hallelujah (Live)', artist: 'Jeff Buckley' }, trackId: 'live' },
@@ -877,10 +951,10 @@ test('update discovery balances distinct references, enforces count bounds and r
       token: 'secret-audiomuse-token',
       server: 'navidrome',
       budgetMs: 60000,
-      calibration,
     },
   });
   t.onTestFinished(() => app.close());
+  await calibrate(app);
   const reference = { request: { title: 'Hallelujah', artist: 'Jeff Buckley' }, trackId: 'studio' };
   const otherReference = {
     request: { title: 'Hallelujah (Live)', artist: 'Jeff Buckley' },
@@ -1002,10 +1076,10 @@ test('update discovery failures and concurrent edits preserve the source and do 
       token: 'secret-audiomuse-token',
       server: 'navidrome',
       budgetMs: 60000,
-      calibration,
     },
   });
   t.onTestFinished(() => app.close());
+  await calibrate(app);
   const references = [
     { request: { title: 'Hallelujah', artist: 'Jeff Buckley' }, trackId: 'studio' },
   ];
@@ -1060,10 +1134,10 @@ test('a deployment outside the supported minor release or with a malformed versi
       token: 'secret-audiomuse-token',
       server: 'navidrome',
       budgetMs: 60000,
-      calibration,
     },
   });
   t.onTestFinished(() => service.close());
+  await calibrate(service);
   const run = (name: 'check_audiomuse_connection' | 'discover_tracks') =>
     service.execute(name, name === 'discover_tracks' ? { description: 'jazz' } : {});
   audio.controls.version = 'v3.7.0';
@@ -1104,53 +1178,4 @@ test('a deployment outside the supported minor release or with a malformed versi
       assert.match(result.message ?? '', /invalid version/);
     }
   }
-});
-
-test('a calibration file must record a release of the supported minor', async (t) => {
-  const { loadConfig } = await import('../../src/config.ts');
-  const { writeFile } = await import('node:fs/promises');
-  const { join } = await import('node:path');
-  const remote = await navidromeFixture();
-  t.onTestFinished(() => remote.close());
-  const calibrationPath = join(remote.directory, 'calibration.json');
-  const load = async (version: unknown) => {
-    await writeFile(
-      calibrationPath,
-      JSON.stringify({
-        ...calibration,
-        version,
-        audiomuseUrl: 'http://audiomuse.example',
-        navidromeUrl: remote.config.url,
-        server: 'navidrome',
-      }),
-    );
-    return () =>
-      loadConfig({
-        NAVIDROME_URL: remote.config.url,
-        NAVIDROME_USERNAME: 'tester',
-        NAVIDROME_PASSWORD: 'secret-password',
-        NAVIDROME_DB_PATH: remote.config.databasePath,
-        AUDIOMUSE_URL: 'http://audiomuse.example',
-        AUDIOMUSE_API_TOKEN: 'secret-audiomuse-token',
-        AUDIOMUSE_SERVER: 'navidrome',
-        AUDIOMUSE_CALIBRATION_PATH: calibrationPath,
-      });
-  };
-  for (const version of ['v3.7.1', 'v3.7.4', 'v3.7.12'])
-    assert.equal((await load(version))().audiomuse?.calibration?.version, version);
-  for (const version of ['v3.8.0', 'v3.6.2'])
-    assert.throws(await load(version), {
-      code: 'configuration_error',
-      message: new RegExp(
-        `${version.replaceAll('.', '\\.')}.*3\\.7\\.x.*v3\\.7\\.4.*stale.*redone`,
-      ),
-    });
-  for (const version of ['3.7.4', 'v3.7', 'latest', 'v03.7.1', 'v3.007.9', 'v3.7.01'])
-    assert.throws(await load(version), {
-      code: 'configuration_error',
-      message: new RegExp(
-        `invalid version "${version.replaceAll('.', '\\.')}".*vMAJOR\\.MINOR\\.PATCH.*3\\.7\\.x.*v3\\.7\\.4.*redone`,
-      ),
-    });
-  assert.throws(await load(374), { code: 'configuration_error' });
 });
