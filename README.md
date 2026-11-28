@@ -115,9 +115,7 @@ pnpm build
 Copy [.env.example](.env.example) to `.env` if you haven't configured one already.
 Fill in your Navidrome credentials. `NAVIDROME_DB_PATH` is optional; leave it
 unset to use the per-user default described under
-[A few things to know](#a-few-things-to-know). The `AUDIOMUSE_CALIBRATION_PATH` you set must also be absolute: relative paths
-resolve against the MCP client's working directory, which may not be this
-checkout.
+[A few things to know](#a-few-things-to-know).
 
 For your MCP client, use `node` as the command with these arguments:
 
@@ -140,10 +138,11 @@ the AudioMuse media server that matches your Navidrome URL, asking you to choose
 when several match. Once it's installed, ask your assistant to calibrate
 recommendations.
 
-Discovery also needs `AUDIOMUSE_CALIBRATION_PATH`, a quality-calibration file for
-your deployment, which setup doesn't write yet. The
-[calibration guide](docs/calibration.md) has commands to collect, rate, and
-verify recommendations. To configure AudioMuse by hand, see
+Recommendations stay off until you calibrate them: your assistant collects
+candidates, you rate them while listening in Navidrome, and it saves a quality
+cutoff per scale in the local database. [Calibration](docs/calibration.md)
+explains how it works, when to recalibrate, and how to move cutoffs from an old
+calibration file. To configure AudioMuse by hand, see
 [AudioMuse setup](docs/discovery.md); `AUDIOMUSE_SERVER` is the `server_id` of
 your Navidrome connection in AudioMuse's `GET /api/servers` response.
 
@@ -181,14 +180,19 @@ appends to an existing one. Recovery tools can also complete remote writes.
 | `get_update_operation`      | Inspect an append's outcome and compare playlist states.      |
 | `reconcile_playlist_update` | Resolve an uncertain append after external investigation.     |
 
-| Recommendation tool            | Purpose                                                         |
-| ------------------------------ | --------------------------------------------------------------- |
-| `check_audiomuse_connection`   | Check AudioMuse connectivity and calibration configuration.     |
-| `discover_tracks`              | Find library tracks from a listening description.               |
-| `find_similar_tracks`          | Find tracks similar to one library recording.                   |
-| `configure_playlist_discovery` | Choose a draft's reference tracks and retained recommendations. |
-| `expand_playlist_draft`        | Add recommendations to a resolved new-playlist draft.           |
-| `expand_playlist_update`       | Recommend additions using an update's reference songs.          |
+| Recommendation tool              | Purpose                                                         |
+| -------------------------------- | --------------------------------------------------------------- |
+| `check_audiomuse_connection`     | Check AudioMuse connectivity and each scale's calibration.      |
+| `reset_calibration`              | Mark a scale stale after an AudioMuse model or index change.    |
+| `discover_tracks`                | Find library tracks from a listening description.               |
+| `find_similar_tracks`            | Find tracks similar to one library recording.                   |
+| `configure_playlist_discovery`   | Choose a draft's reference tracks and retained recommendations. |
+| `expand_playlist_draft`          | Add recommendations to a resolved new-playlist draft.           |
+| `expand_playlist_update`         | Recommend additions using an update's reference songs.          |
+| `collect_calibration_candidates` | Collect candidates with raw scores for a calibration probe.     |
+| `record_calibration_ratings`     | Record good or poor ratings of calibration candidates.          |
+| `propose_calibration`            | Propose a quality cutoff from ratings and show what it accepts. |
+| `save_calibration`               | Save a proposed cutoff, or an explicit cutoff with a note.      |
 
 Discovery and recommendation generation require the optional AudioMuse setup
 described above. Reference and retention choices are saved locally.
@@ -216,8 +220,8 @@ retry rules.
 - If a write's outcome is uncertain, inspect and reconcile it before trying again.
   The server blocks uncertain appends to prevent accidental duplicates.
 - If the server exits immediately, it prints one generic startup error on purpose.
-  Check that absolute paths in `.env` (`NAVIDROME_DB_PATH`,
-  `AUDIOMUSE_CALIBRATION_PATH`) still exist after moving or renaming the checkout.
+  Check that an absolute `NAVIDROME_DB_PATH` in `.env` still exists after moving
+  or renaming the checkout.
 - Keep credentials in `.env` or your process environment.
 
 [Playlist workflows and recovery](docs/playlist-workflows.md) explains the tools.

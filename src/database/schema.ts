@@ -5,9 +5,12 @@ import {
   primaryKey,
   check,
   uniqueIndex,
+  index,
+  real,
 } from 'drizzle-orm/sqlite-core';
+import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
-import type { Operation } from '../playlists/domain.ts';
+import type { Operation, CalibrationScale, CalibrationVerdict } from '../playlists/domain.ts';
 
 export const identity = sqliteTable(
   'identity',
@@ -82,5 +85,58 @@ export const updateOperations = sqliteTable(
     uniqueIndex('update_target_block')
       .on(table.targetId)
       .where(sql`${table.blocked} = 1`),
+  ],
+);
+
+const scaleCheck = (column: AnySQLiteColumn) => sql`${column} IN ('similarity', 'description')`;
+
+export const calibrations = sqliteTable(
+  'calibrations',
+  {
+    id: integer().primaryKey({ autoIncrement: true }),
+    scale: text().$type<CalibrationScale>().notNull(),
+    cutoff: real().notNull(),
+    audiomuseUrl: text('audiomuse_url').notNull(),
+    server: text().notNull(),
+    navidromeUrl: text('navidrome_url').notNull(),
+    release: text().notNull(),
+    releaseMinor: text('release_minor').notNull(),
+    epoch: integer(),
+    note: text(),
+    savedAt: text('saved_at').notNull(),
+    resetAt: text('reset_at'),
+  },
+  (table) => [
+    check('calibrations_scale', scaleCheck(table.scale)),
+    index('calibration_scale').on(table.scale, table.id),
+  ],
+);
+
+export const calibrationScales = sqliteTable(
+  'calibration_scales',
+  {
+    scale: text().$type<CalibrationScale>().primaryKey(),
+    epoch: integer().notNull(),
+  },
+  (table) => [check('calibration_scales_scale', scaleCheck(table.scale))],
+);
+
+export const calibrationRatings = sqliteTable(
+  'calibration_ratings',
+  {
+    scale: text().$type<CalibrationScale>().notNull(),
+    epoch: integer().notNull(),
+    probe: text().notNull(),
+    trackId: text('track_id').notNull(),
+    title: text().notNull(),
+    artist: text().notNull(),
+    score: real().notNull(),
+    rating: text().$type<CalibrationVerdict>().notNull(),
+    ratedAt: text('rated_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.scale, table.epoch, table.probe, table.trackId] }),
+    check('calibration_ratings_scale', scaleCheck(table.scale)),
+    check('calibration_ratings_rating', sql`${table.rating} IN ('good', 'poor')`),
   ],
 );

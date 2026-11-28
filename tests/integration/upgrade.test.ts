@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { navidromeFixture } from '../support/navidrome.ts';
 import { createApp } from '../../src/app.ts';
+import { Storage } from '../../src/database/storage.ts';
 
 test('legacy database retains revisions, preview, unknown publication, aliases and recovery across upgrades', async (t) => {
   const remote = await navidromeFixture();
@@ -165,3 +166,55 @@ test.each([
     assert.equal(remote.playlists.length, 0);
   },
 );
+
+test('a version 4 database keeps its drafts and gains calibration storage on upgrade', async (t) => {
+  const remote = await navidromeFixture();
+  t.onTestFinished(() => remote.close());
+  const db = new Database(remote.config.databasePath);
+  db.exec('CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY)');
+  for (const [index, file] of [
+    '0001_initial.sql',
+    '0002_operation_state.sql',
+    '0003_discovery.sql',
+    '0004_updates.sql',
+  ].entries()) {
+    db.exec(readFileSync(new URL(`../../drizzle/${file}`, import.meta.url), 'utf8'));
+    db.prepare('INSERT INTO schema_migrations VALUES (?)').run(index + 1);
+  }
+  const fingerprint = createHash('sha256')
+    .update(`${remote.config.url}\n${remote.config.username}`)
+    .digest('hex');
+  db.prepare('INSERT INTO identity VALUES (1, ?)').run(fingerprint);
+  db.prepare('INSERT INTO drafts VALUES (?, ?, ?)').run('kept', 1, 0);
+  db.prepare('INSERT INTO revisions VALUES (?, ?, ?, ?)').run(
+    'kept',
+    1,
+    JSON.stringify({
+      id: 'kept',
+      revision: 1,
+      name: 'Kept',
+      visibility: 'private',
+      entries: [],
+      previewed: false,
+      locked: false,
+    }),
+    0,
+  );
+  db.close();
+
+  const storage = new Storage(remote.config);
+  t.onTestFinished(() => storage.close());
+  const saved = storage.saveCalibration({
+    scale: 'description',
+    cutoff: 0.7,
+    binding: {
+      audiomuseUrl: 'http://audiomuse.test',
+      server: 'navidrome',
+      navidromeUrl: remote.config.url,
+      release: 'v3.7.4',
+    },
+    note: 'Moved from calibration file',
+  });
+  assert.deepEqual(storage.currentCalibration('description'), saved);
+  assert.equal(storage.getDraft('kept').name, 'Kept');
+});

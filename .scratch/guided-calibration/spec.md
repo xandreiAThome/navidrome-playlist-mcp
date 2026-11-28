@@ -1,6 +1,6 @@
 # Guided calibration in conversation
 
-Status: ready-for-agent
+Status: done
 
 Blocked by: [audiomuse-3.7.4](../audiomuse-3.7.4/spec.md); after
 [setup-cli](../setup-cli/spec.md).

@@ -1,236 +1,92 @@
 # Calibrate AudioMuse recommendations
 
 Calibration tells this service which recommendation scores are good enough for
-**your** library. You collect candidates, listen to them, and choose two cutoffs:
+**your** library. No default quality cutoffs ship: AudioMuse scores depend on its
+models, index, and library, so a value from another installation means nothing
+here. Until a scale is calibrated, recommendations on it return
+`calibration_required`; explicit song lists keep working.
 
-- `maxDistance`: the largest similarity distance you'll accept. Lower is closer.
-- `minDescriptionSimilarity`: the lowest description score you'll accept. Higher
-  is closer to the prompt.
+To start, ask your assistant to calibrate recommendations. It runs the whole
+process with you in conversation through the calibration tools; there are no
+scripts to run.
 
-These are separate scales. There isn't a universal value to copy from another
-installation, and this process doesn't train a model or rebuild an index.
+## Two scales
 
-## 1. Prepare your connection
+Recommendations use two independent scales, each with its own quality cutoff:
 
-Complete the [README setup](../README.md) first. Run these commands in Bash from
-the repository root. You'll need Node and pnpm
-for the final check, plus `curl` and `jq` for collecting samples.
+- **Similarity** (`find_similar_tracks` and expansion): a distance from a library
+  track. Lower is closer; the cutoff is the largest distance accepted.
+- **Description** (`discover_tracks`): a similarity to a listening description.
+  Higher is closer; the cutoff is the smallest similarity accepted.
 
-Your AudioMuse library must already be analyzed. Configure these in `.env`:
+Both cutoffs are inclusive. Calibrate, save, and reset each scale separately; you
+can calibrate similarity first and use similar-song features while description
+search still reports `calibration_required`.
 
-```dotenv
-NAVIDROME_URL=https://music.example.com
-NAVIDROME_USERNAME=your-user
-NAVIDROME_PASSWORD='your-subsonic-password'
-AUDIOMUSE_URL=https://audiomuse.example.com
-AUDIOMUSE_API_TOKEN='your-token'
-AUDIOMUSE_SERVER=your-server-id
-```
+## How calibration works
 
-Load your trusted `.env` into the shell and create a directory for the results:
+1. **Probes.** You choose calibration probes: library tracks you know well for the
+   similarity scale, or descriptions you would actually ask for, such as "calm
+   instrumental jazz", for the description scale. Cover the styles you listen to,
+   including mixed contexts.
+2. **Candidates.** The assistant collects candidates for each probe with their raw
+   scores. Collection works before calibration, applies no cutoff, and checks each
+   candidate against your Navidrome library.
+3. **Ratings.** You listen in Navidrome and rate each candidate good or poor. The
+   service trusts these calibration ratings as your judgment, so rate only what
+   you have heard. Scores alone are not a judgment, and membership in an existing
+   playlist doesn't prove a match is good or bad.
+4. **Proposal.** The service proposes a cutoff: the loosest value that still
+   rejects every poor rating. It needs at least one good and one poor rating across
+   at least three probes. If the ratings fall short, or good and poor candidates
+   don't separate, the assistant collects candidates further down the list or for
+   another probe. You see which rated candidates the proposed cutoff accepts and
+   rejects before anything is saved.
+5. **Save.** Once you agree, the assistant saves the proposed cutoff. Your ratings
+   are kept as its evidence. Afterwards, it may suggest trying recommendations for
+   a probe you haven't rated, as a check.
 
-```bash
-set -a
-source .env
-set +a
-mkdir -p .data/calibration
-```
+A cutoff never loosens to fill a requested count: recommendations that miss it
+are reported as a shortfall.
 
-Define a helper for read-only AudioMuse requests:
+`check_audiomuse_connection` reports each scale as `missing`, `calibrated` with its
+cutoff, or `stale` with what changed.
 
-```bash
-am_get() {
-  local endpoint="$1"
-  shift
-  curl -fsS --connect-timeout 10 --max-time 60 --get \
-    -H "Authorization: Bearer $AUDIOMUSE_API_TOKEN" \
-    "${AUDIOMUSE_URL%/}$endpoint" \
-    --data-urlencode "server=$AUDIOMUSE_SERVER" "$@"
-}
-```
+## When to recalibrate
 
-Check the version and selected connection:
+A calibration belongs to the deployment it was measured on. It becomes stale, and
+recommendations on that scale return `calibration_required`, when any of these
+change:
 
-```bash
-am_get /api/version | jq -e '.app_version | test("^v3\\.7\\.(0|[1-9][0-9]*)$")'
-am_get /api/servers |
-  jq '.servers[] | {server_id, name, server_type}'
-```
+- the AudioMuse URL;
+- the selected AudioMuse media server;
+- the Navidrome URL;
+- the AudioMuse minor release, such as 3.7 to 3.8. Patch releases within the same
+  minor release keep calibration.
 
-The version check should print `true`. Use the `server_id` of the Navidrome
-connection you want to calibrate, pointing to the same `NAVIDROME_URL` as this
-service. Confirm the URL in AudioMuse's media-server settings. The adapter supports
-AudioMuse 3.7.x and is validated on v3.7.4.
+AudioMuse doesn't report model or index changes, so the service can't detect them.
+After you change models, analysis or index settings, or the distance metric, or
+after a large library change, ask your assistant to reset the affected scale. Reset
+marks it stale until you recalibrate.
 
-## 2. Collect similar-song candidates
+Saving from ratings or resetting a calibrated scale starts fresh ratings. Earlier
+ratings and calibrations stay in the local database as history. Saving a cutoff
+with a note leaves ratings in progress counting toward the next proposal.
 
-Pick several songs you know well across the styles you actually listen to. Include
-both focused and mixed listening contexts. Keep a few extra reference songs aside
-for the final check, rather than choosing cutoffs from every example you'll test.
+## Moving cutoffs from a calibration file
 
-Get each song's **Navidrome track ID** through the MCP `search_tracks` tool. For
-example, ask your MCP client to call:
+Earlier versions read cutoffs from a JSON file named by `AUDIOMUSE_CALIBRATION_PATH`.
+That setting is now ignored: it neither loads the file nor stops startup, and both
+scales report `missing` until calibrated.
 
-```json
-{ "query": "Plastic Love" }
-```
+If your file still describes this deployment and its minor release, move its
+cutoffs once instead of recalibrating. Ask your assistant to save each one with a
+note recording where it came from:
 
-Inspect the title, artist, album, and version before choosing an ID. Then substitute
-that ID below:
+- the file's `maxDistance` as the similarity cutoff;
+- its `minDescriptionSimilarity` as the description cutoff.
 
-```bash
-REFERENCE_TRACK_ID='replace-with-a-navidrome-track-id'
-
-am_get /api/max_distance \
-  --data-urlencode "item_id=$REFERENCE_TRACK_ID" |
-  jq -e '.max_distance | numbers'
-
-am_get /api/similar_tracks \
-  --data-urlencode "item_id=$REFERENCE_TRACK_ID" \
-  --data-urlencode 'n=200' \
-  --data-urlencode 'eliminate_duplicates=false' \
-  --data-urlencode 'radius_similarity=false' \
-  --data-urlencode 'mood_similarity=false' \
-  > .data/calibration/similarity.json
-
-jq --arg reference "$REFERENCE_TRACK_ID" \
-  '[.[] | select(.item_id != $reference)] | sort_by(.distance) |
-   .[] | {id: .item_id, title, artist: .author, distance}' \
-  .data/calibration/similarity.json
-```
-
-Repeat for your other reference songs, saving each response under a different
-filename. A failed availability request is a problem to investigate, not evidence
-that no similar songs exist.
-
-## 3. Collect description candidates
-
-Use descriptions you expect to ask your assistant for, such as “city pop”, “rock
-ballads”, or “calm instrumental jazz”. Save one response per description:
-
-```bash
-DESCRIPTION='calm instrumental jazz'
-
-jq -n --arg query "$DESCRIPTION" '{query: $query, limit: 200}' \
-  > .data/calibration/description-request.json
-
-SERVER_QUERY="$(jq -rn --arg server "$AUDIOMUSE_SERVER" '$server | @uri')"
-
-curl -fsS --connect-timeout 10 --max-time 60 \
-  -H "Authorization: Bearer $AUDIOMUSE_API_TOKEN" \
-  -H 'Content-Type: application/json' \
-  --data-binary @.data/calibration/description-request.json \
-  "${AUDIOMUSE_URL%/}/api/clap/search?server=$SERVER_QUERY" > .data/calibration/description.json
-
-jq '.results | sort_by(.similarity) | reverse | .[] |
-    {id: .item_id, title, artist: .author, similarity}' \
-  .data/calibration/description.json
-```
-
-These requests collect candidates directly from AudioMuse, so they work before
-this service has a calibration file. They don't create playlists. The raw results
-haven't passed this service's library validation or alternate-recording filters.
-
-## 4. Listen, rate, and choose cutoffs
-
-Listen to candidates in Navidrome. Record the reference or description, candidate
-ID, score, and your judgment in `.data/calibration/report.md`. Rate examples near
-possible boundaries, including poor fits; don't judge quality from scores alone.
-Membership in an existing playlist isn't proof of a good or bad match.
-
-A simple record looks like this. **These scores are invented examples:**
-
-| Kind        | Reference or description | Candidate ID | Score | Judgment |
-| ----------- | ------------------------ | ------------ | ----- | -------- |
-| Similarity  | Reference track A        | track-1      | 0.04  | Good     |
-| Similarity  | Reference track B        | track-2      | 0.08  | Good     |
-| Similarity  | Reference track A        | track-3      | 0.15  | Poor     |
-| Description | calm instrumental jazz   | track-4      | 0.70  | Good     |
-| Description | rock ballads             | track-5      | 0.62  | Good     |
-| Description | calm instrumental jazz   | track-6      | 0.48  | Poor     |
-
-For an initial conservative boundary, take the largest accepted distance and the
-smallest accepted description score. In this example those are **0.08** and
-**0.62**. The filters include the boundary value itself.
-
-Check every rated example that those cutoffs would admit. If an accepted range
-also contains poor fits, tighten the cutoff and accept the resulting shortages.
-If no useful cutoff separates the results, collect more ratings or investigate
-the model/index; a single score cannot capture every musical preference. Don't
-loosen a cutoff just to fill a requested count.
-
-Also record the AudioMuse release, model names/versions, distance metric, and index
-build or analysis date. These explain which deployment your ratings describe.
-
-## 5. Write the calibration file
-
-Set these to the values you measured, replacing the illustrative numbers:
-
-```bash
-MAX_DISTANCE='0.08'
-MIN_DESCRIPTION_SIMILARITY='0.62'
-INDEX_MODEL='replace-with-models-metric-and-index-build-or-analysis-date'
-AUDIOMUSE_VERSION="$(am_get /api/version | jq -r '.app_version')"
-
-jq -n \
-  --arg audiomuseUrl "${AUDIOMUSE_URL%/}" \
-  --arg navidromeUrl "${NAVIDROME_URL%/}" \
-  --arg server "$AUDIOMUSE_SERVER" \
-  --arg version "$AUDIOMUSE_VERSION" \
-  --arg indexModel "$INDEX_MODEL" \
-  --arg report '.data/calibration/report.md' \
-  --argjson maxDistance "$MAX_DISTANCE" \
-  --argjson minDescriptionSimilarity "$MIN_DESCRIPTION_SIMILARITY" \
-  '{audiomuseUrl: $audiomuseUrl, navidromeUrl: $navidromeUrl,
-    server: $server, version: $version, indexModel: $indexModel,
-    report: $report, maxDistance: $maxDistance,
-    minDescriptionSimilarity: $minDescriptionSimilarity}' \
-  > .data/audiomuse-calibration.json
-```
-
-Add its absolute path to `.env`:
-
-```dotenv
-AUDIOMUSE_CALIBRATION_PATH=/absolute/path/to/navidrome-playlist-mcp/.data/audiomuse-calibration.json
-```
-
-The `report` value is informational and is not read by the service, so keep it
-relative to the repository (as in the command above) and it will survive moving
-or renaming the checkout. `AUDIOMUSE_CALIBRATION_PATH`, in contrast, is resolved
-by the process: update it after moving the repository, or startup fails with a
-configuration error.
-
-## 6. Verify through the service
-
-Build the service and reconnect your MCP client so it loads the new configuration:
-
-```bash
-pnpm build
-```
-
-Call `check_audiomuse_connection` with `{}`. It should return `status: "ok"`,
-`connected: true`, and `calibrated: true`. That confirms configuration and version
-compatibility, not recommendation quality.
-
-Then test your held-aside songs and descriptions with these tools:
-
-| Tool                  | Example input                                             |
-| --------------------- | --------------------------------------------------------- |
-| `find_similar_tracks` | `{"trackId":"your-held-aside-track-id","count":5}`        |
-| `discover_tracks`     | `{"description":"your-held-aside-description","count":5}` |
-
-Check the returned recommendations by listening. Similarity results must have
-`recommendation.score <= maxDistance`; description results must have
-`recommendation.score >= minDescriptionSimilarity`. A `shortfall` is expected when
-not enough candidates meet the cutoff. Record what you tested and any failures
-in your report. These two tools don't create or update remote playlists.
-
-If this final check exposes poor fits, revise the cutoffs and repeat it with fresh
-examples. A small calibration is a starting point, not a guarantee for all queries.
-
-## When to repeat this
-
-Recalibrate after changing the AudioMuse minor release (for example 3.7 to 3.8),
-models, distance metric, index settings, or library. Patch releases within 3.7.x
-keep your calibration. The application checks URLs, server selection, and minor
-release, but it cannot detect every model or index change for you.
+The saved cutoffs are bound to the live deployment. Then remove
+`AUDIOMUSE_CALIBRATION_PATH` from your configuration; you can delete the file. If
+the file was made on another minor release, or the models or index have changed
+since, recalibrate instead.

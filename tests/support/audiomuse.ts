@@ -29,6 +29,8 @@ export async function audioMuseFixture() {
     fail: false,
     analysisFails: false,
     byReference: {} as Record<string, Row[]>,
+    /** Description-search results per query; other queries get `rows`. */
+    byQuery: {} as Record<string, Row[]>,
     rows: [] as Row[],
   };
   const servers = (): MediaServer[] =>
@@ -42,6 +44,9 @@ export async function audioMuseFixture() {
     ];
   const server = createServer(async (req, res) => {
     const url = new URL(req.url!, 'http://localhost');
+    let body = '';
+    for await (const chunk of req) body += String(chunk);
+    const search = (body ? JSON.parse(body) : {}) as { query?: string; limit?: number };
     const listing = url.pathname === '/api/version' || url.pathname === '/api/servers';
     const selected = url.searchParams.get('server');
     if (
@@ -67,9 +72,17 @@ export async function audioMuseFixture() {
           : url.pathname === '/api/servers'
             ? { servers: servers() }
             : url.pathname === '/api/clap/search'
-              ? { results: controls.rows }
+              ? {
+                  results: (controls.byQuery[search.query!] ?? controls.rows).slice(
+                    0,
+                    search.limit,
+                  ),
+                }
               : url.pathname === '/api/similar_tracks'
-                ? (controls.byReference[url.searchParams.get('item_id')!] ?? controls.rows)
+                ? (controls.byReference[url.searchParams.get('item_id')!] ?? controls.rows).slice(
+                    0,
+                    Number(url.searchParams.get('n')),
+                  )
                 : url.pathname === '/api/max_distance'
                   ? { max_distance: 1 }
                   : { app_version: controls.version },

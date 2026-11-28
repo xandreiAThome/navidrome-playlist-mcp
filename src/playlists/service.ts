@@ -45,7 +45,12 @@ export class PlaylistService {
       find_similar_tracks: ({ trackId, count, allowAlternateVersions }) =>
         discovery.similar(trackId, count, allowAlternateVersions),
       discover_tracks: ({ description, count }) => discovery.describe(description, count),
-      check_audiomuse_connection: () => audiomuse.checkConnection(),
+      check_audiomuse_connection: () => discovery.status(),
+      reset_calibration: ({ scale }) => discovery.reset(scale),
+      collect_calibration_candidates: (value) => discovery.collect(value),
+      record_calibration_ratings: (value) => discovery.record(value),
+      propose_calibration: ({ scale }) => discovery.propose(scale),
+      save_calibration: (value) => discovery.save(value),
       check_connection: () => navidrome.ping(),
       search_tracks: ({ query }) => navidrome.search(query),
       resolve_tracks: async ({ songs }) => {

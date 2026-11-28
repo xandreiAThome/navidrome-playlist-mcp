@@ -1,7 +1,5 @@
 # AudioMuse discovery
 
-For a first-time setup, follow the [step-by-step calibration guide](calibration.md).
-
 AudioMuse-AI is separately managed; this service does not install models or trigger
 analysis. The adapter supports **3.7.x** releases and is validated against **v3.7.4**;
 other minor releases are rejected until validated. Explicit song-list workflows
@@ -24,31 +22,11 @@ Navidrome validation. Requests are sequential with no automatic retries, share o
 deadline, and retrieve at most 200 candidates per reference and 5,000 per expansion.
 
 `check_audiomuse_connection` checks authentication, selected-server binding, version,
-and whether calibration is configured. Discovery requires
-`AUDIOMUSE_CALIBRATION_PATH`, pointing to a JSON file such as:
-
-```json
-{
-  "audiomuseUrl": "https://audiomuse.example.com",
-  "navidromeUrl": "https://music.example.com",
-  "server": "your-navidrome-server-id",
-  "version": "v3.7.4",
-  "indexModel": "identify the deployed MusicNN/CLAP models, index, and metric",
-  "report": "path or reference to your measured calibration report",
-  "maxDistance": 0.1,
-  "minDescriptionSimilarity": 0.6
-}
-```
-
-**The numeric values above illustrate the format; they are not calibrated
-recommendations.** Measure suitable quality floors against representative
-single-style and mixed-style playlists for your index/model. Distances and CLAP
-similarities are separate measures. Recalibrate when models, index settings, metric,
-minor release, or library change. Deployment URLs and server selection must match
-the report. A calibration from another minor release is rejected as stale; patch
-releases within 3.7.x keep it. Version and coverage do not
-fingerprint an index build: operators must invalidate calibration after model or
-index changes. Without a report, discovery returns `calibration_required`.
+and each scale's calibration. Discovery also requires calibration: no default
+quality cutoffs ship, and an uncalibrated or stale scale returns
+`calibration_required`. Ask your assistant to calibrate recommendations;
+[calibration](calibration.md) explains the scales, staleness, and when to
+recalibrate.
 
 Use `discover_tracks` for a listening description or `find_similar_tracks` for a
 library-track ID. Results contain `recommendations`, separate from requested-song

@@ -25,13 +25,6 @@ export type Config = {
     token: string;
     server: string;
     budgetMs: number;
-    calibration?: {
-      version: string;
-      indexModel: string;
-      report: string;
-      maxDistance: number;
-      minDescriptionSimilarity: number;
-    };
   };
   url: string;
   username: string;
@@ -41,6 +34,54 @@ export type Config = {
   timeoutMs: number;
   searchPageSize: number;
   searchMaxPages: number;
+};
+export const calibrationScaleSchema = z.enum(['similarity', 'description']);
+/** A recommendation scale, calibrated, saved, and reset independently. */
+export type CalibrationScale = z.infer<typeof calibrationScaleSchema>;
+export const calibrationVerdictSchema = z.enum(['good', 'poor']);
+export type CalibrationVerdict = z.infer<typeof calibrationVerdictSchema>;
+/** What a calibration was measured against; a change to any field makes it stale. */
+export type CalibrationBinding = {
+  audiomuseUrl: string;
+  server: string;
+  navidromeUrl: string;
+  /** The AudioMuse release, e.g. `v3.7.4`; only its minor release is binding. */
+  release: string;
+};
+/** A saved quality cutoff for one scale. The newest one per scale is current. */
+export type Calibration = {
+  id: number;
+  scale: CalibrationScale;
+  /** Similarity: the maximum distance. Description: the minimum similarity. */
+  cutoff: number;
+  binding: CalibrationBinding & { minor: string };
+  /** The rating epoch whose ratings are this calibration's evidence; absent for a note. */
+  epoch?: number;
+  savedAt: string;
+  /** Recorded instead of ratings, e.g. for cutoffs moved from a calibration file. */
+  note?: string;
+  /** Set when the user reset the scale after an undetectable model or index change. */
+  resetAt?: string;
+};
+/** Why a stored calibration no longer applies: a changed bound field, or a reset. */
+export type CalibrationChange = keyof CalibrationBinding | 'reset';
+/** A scale's calibration against the live deployment. */
+export type CalibrationStatus =
+  | { state: 'missing' }
+  | { state: 'calibrated'; cutoff: number }
+  | { state: 'stale'; cutoff: number; changes: CalibrationChange[] };
+/** What a proposal still needs before it can propose a quality cutoff. */
+export type CalibrationNeed = 'probes' | 'good' | 'poor' | 'separation';
+/** One candidate for a calibration probe, rated good or poor by the user. */
+export type CalibrationRating = {
+  /** A library track ID (similarity) or listening description (description). */
+  probe: string;
+  trackId: string;
+  title: string;
+  artist: string;
+  /** The candidate's distance (similarity) or similarity (description). */
+  score: number;
+  rating: CalibrationVerdict;
 };
 export type ProblemCode =
   | 'target_changed'
@@ -320,6 +361,8 @@ export type UpdatePreview = {
   resultingTrackIds: string[];
   repeatedTrackIds: string[];
 };
+/** A calibration probe's candidate with its raw distance (similarity) or similarity (description). */
+export type CalibrationCandidate = { track: Track; score: number };
 export const toolSchemas = {
   save_playlist_update: saveUpdateSchema,
   get_playlist_update: getDraftSchema,
@@ -347,6 +390,49 @@ export const toolSchemas = {
     .object({ description: text, count: z.number().int().min(1).max(100).default(20) })
     .strict(),
   check_audiomuse_connection: z.object({}).strict(),
+  reset_calibration: z.object({ scale: calibrationScaleSchema }).strict(),
+  collect_calibration_candidates: z
+    .object({
+      scale: calibrationScaleSchema,
+      probe: text,
+      offset: z.number().int().min(0).max(199).default(0),
+      count: z.number().int().min(1).max(50).default(10),
+    })
+    .strict(),
+  record_calibration_ratings: z
+    .object({
+      scale: calibrationScaleSchema,
+      probe: text,
+      ratings: z
+        .array(
+          z
+            .object({
+              trackId: text,
+              title: text,
+              artist: text,
+              score: z.number().finite(),
+              rating: calibrationVerdictSchema,
+            })
+            .strict(),
+        )
+        .min(1)
+        .max(200),
+    })
+    .strict(),
+  propose_calibration: z.object({ scale: calibrationScaleSchema }).strict(),
+  save_calibration: z
+    .object({
+      scale: calibrationScaleSchema,
+      cutoff: z.number().finite(),
+      /**
+       * `ratings`: the cutoff proposed from the scale's ratings. `note`: an explicit
+       * cutoff saved without ratings, e.g. moved from a calibration file, with `note`
+       * recording why.
+       */
+      evidence: z.enum(['ratings', 'note']),
+      note: z.string().trim().min(1).max(1000).optional(),
+    })
+    .strict(),
   check_connection: z.object({}).strict(),
   search_tracks: z.object({ query: text }).strict(),
   resolve_tracks: z.object({ songs: z.array(requestedSongSchema).min(1).max(500) }).strict(),
@@ -402,7 +488,42 @@ export type ToolData = {
   expand_playlist_draft: ExpansionResult;
   find_similar_tracks: DiscoveryResult;
   discover_tracks: DiscoveryResult;
-  check_audiomuse_connection: { connected: boolean; version: string; calibrated: boolean };
+  check_audiomuse_connection: {
+    connected: boolean;
+    version: string;
+    calibration: Record<CalibrationScale, CalibrationStatus>;
+  };
+  reset_calibration:
+    | { scale: CalibrationScale; state: 'missing' }
+    | { scale: CalibrationScale; state: 'stale'; cutoff: number; resetAt: string };
+  collect_calibration_candidates: {
+    scale: CalibrationScale;
+    probe: string;
+    offset: number;
+    candidates: CalibrationCandidate[];
+    /** Present when AudioMuse may have more candidates further down the list. */
+    nextOffset?: number;
+  };
+  record_calibration_ratings: { scale: CalibrationScale; ratings: CalibrationRating[] };
+  propose_calibration: { scale: CalibrationScale; probes: number; good: number; poor: number } & (
+    | { state: 'insufficient'; needs: CalibrationNeed[]; message: string }
+    | {
+        state: 'proposed';
+        cutoff: number;
+        /** Rated candidates the cutoff offers, closest first. */
+        accepted: CalibrationRating[];
+        /** Rated candidates the cutoff withholds, closest first. */
+        rejected: CalibrationRating[];
+      }
+  );
+  save_calibration: {
+    scale: CalibrationScale;
+    state: 'calibrated';
+    cutoff: number;
+    savedAt: string;
+    note?: string;
+    suggestion: string;
+  };
   check_connection: { connected: boolean };
   search_tracks: { tracks: Track[]; complete: boolean };
   resolve_tracks: { resolutions: Resolution[] };

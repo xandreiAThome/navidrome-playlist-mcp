@@ -10,9 +10,15 @@ import type {
   ToolInput,
   ExpansionResult,
   Draft,
+  CalibrationBinding,
+  CalibrationRating,
+  CalibrationScale,
+  CalibrationStatus,
+  ToolData,
 } from '../playlists/domain.ts';
 import type { Navidrome } from '../navidrome/client.ts';
 import type { AudioMuse } from './audiomuse.ts';
+import { calibrationChanges, checkProposal, meetsCutoff, proposeCutoff } from './calibration.ts';
 
 const rowSchema = z.object({
   item_id: z.string().min(1).max(500),
@@ -34,6 +40,17 @@ const recordingTitle = (title: string) =>
     .trim();
 const normalize = (value: string) =>
   value.normalize('NFKC').toLocaleLowerCase().trim().replace(/\s+/g, ' ');
+const missingCalibration = (scale: CalibrationScale) =>
+  new Problem(
+    'calibration_required',
+    `Calibrate the ${scale} scale before using it for recommendations.`,
+    { scale, reason: 'missing' },
+  );
+/** The tool that tests a saved cutoff on a probe the user has not rated. */
+const unratedProbe: Record<CalibrationScale, string> = {
+  similarity: 'find_similar_tracks for another library track',
+  description: 'discover_tracks for another listening description',
+};
 
 export class Discovery {
   constructor(
@@ -41,23 +58,135 @@ export class Discovery {
     private readonly audiomuse: AudioMuse,
     private readonly navidrome: Navidrome,
     private readonly storage: Storage,
+    private readonly navidromeUrl: string,
   ) {}
 
-  private async start() {
+  /** The AudioMuse configuration discovery needs. */
+  private configured() {
     if (!this.config)
       throw new Problem('audiomuse_unavailable', 'Configure AudioMuse to use discovery.');
-    const calibration = this.config.calibration;
-    if (!calibration)
+    return this.config;
+  }
+
+  /** Checks the supported release and selected server under one discovery deadline. */
+  private async connect() {
+    const signal = AbortSignal.timeout(this.configured().budgetMs);
+    const release = await this.audiomuse.supportedVersion(signal);
+    await this.audiomuse.verifyServer(signal);
+    return { signal, release };
+  }
+
+  /** What a calibration saved now would be bound to. */
+  private liveBinding(release: string): CalibrationBinding {
+    const { url, server } = this.configured();
+    return { audiomuseUrl: url, server, navidromeUrl: this.navidromeUrl, release };
+  }
+
+  /**
+   * Checks the deployment and returns the scale's quality cutoff, or reports
+   * `calibration_required` when the scale is missing or stale.
+   */
+  private async start(scale: CalibrationScale) {
+    this.configured();
+    // A missing calibration is reported before any AudioMuse request.
+    if (!this.storage.currentCalibration(scale)) throw missingCalibration(scale);
+    const { signal, release } = await this.connect();
+    const status = this.calibrationStatus(scale, release);
+    if (status.state === 'stale')
       throw new Problem(
         'calibration_required',
-        'Discovery requires a calibration report and quality thresholds for this deployment and index/model.',
+        `The ${scale} calibration is stale for this deployment; recalibrate the ${scale} scale.`,
+        { scale, reason: 'stale', changes: status.changes },
       );
-    const signal = AbortSignal.timeout(this.config.budgetMs);
-    // Config and the deployment check each accept only the single supported minor,
-    // so a loaded calibration always matches the deployment's minor release.
-    await this.audiomuse.supportedVersion(signal);
-    await this.audiomuse.verifyServer(signal);
-    return { signal, calibration };
+    if (status.state === 'missing') throw missingCalibration(scale);
+    return { signal, cutoff: status.cutoff };
+  }
+
+  private calibrationStatus(scale: CalibrationScale, release: string): CalibrationStatus {
+    const calibration = this.storage.currentCalibration(scale);
+    if (!calibration) return { state: 'missing' };
+    const changes = calibrationChanges(calibration, this.liveBinding(release));
+    return changes.length
+      ? { state: 'stale', cutoff: calibration.cutoff, changes }
+      : { state: 'calibrated', cutoff: calibration.cutoff };
+  }
+
+  /** The deployment's connection and each scale's calibration status. */
+  async status(): Promise<ToolData['check_audiomuse_connection']> {
+    const connection = await this.audiomuse.checkConnection();
+    return {
+      ...connection,
+      calibration: {
+        similarity: this.calibrationStatus('similarity', connection.version),
+        description: this.calibrationStatus('description', connection.version),
+      },
+    };
+  }
+
+  /**
+   * Marks the scale's calibration stale after a model or index change AudioMuse
+   * does not report, and starts fresh calibration ratings; earlier ones stay as history.
+   */
+  reset(scale: CalibrationScale): ToolData['reset_calibration'] {
+    const calibration = this.storage.resetCalibration(scale);
+    if (!calibration?.resetAt) return { scale, state: 'missing' };
+    return { scale, state: 'stale', cutoff: calibration.cutoff, resetAt: calibration.resetAt };
+  }
+
+  /** Proposes a quality cutoff from the scale's ratings toward its next calibration. */
+  propose(scale: CalibrationScale): ToolData['propose_calibration'] {
+    return proposeCutoff(scale, this.storage.calibrationRatings(scale));
+  }
+
+  /** Records the user's ratings for one probe toward the scale's next calibration. */
+  record(input: ToolInput<'record_calibration_ratings'>): ToolData['record_calibration_ratings'] {
+    const { scale, probe, ratings } = input;
+    this.storage.recordCalibrationRatings(
+      scale,
+      ratings.map((rating) => ({ probe, ...rating })),
+    );
+    return { scale, ratings: this.storage.calibrationRatings(scale) };
+  }
+
+  /**
+   * Saves a scale's quality cutoff bound to the live deployment: either the cutoff
+   * currently proposed from its ratings, or an explicit cutoff with a recorded note.
+   */
+  async save(input: ToolInput<'save_calibration'>): Promise<ToolData['save_calibration']> {
+    const { scale, cutoff, evidence, note } = input;
+    if (evidence === 'ratings' && note)
+      throw new Problem(
+        'invalid_input',
+        'A note is only recorded for an explicit cutoff; use evidence "note" to save one.',
+      );
+    if (evidence === 'note' && !note)
+      throw new Problem(
+        'invalid_input',
+        'Record a note explaining where an explicit cutoff came from when saving without ratings.',
+      );
+    if (scale === 'similarity' && cutoff < 0)
+      throw new Problem(
+        'invalid_input',
+        'A similarity cutoff is a distance and cannot be negative.',
+      );
+    const { release } = await this.connect();
+    const saved = this.storage.saveCalibration({
+      scale,
+      cutoff,
+      binding: this.liveBinding(release),
+      // The proposal is checked against the ratings inside the save's transaction.
+      ...(note
+        ? { note }
+        : { verify: (ratings: CalibrationRating[]) => checkProposal(scale, cutoff, ratings) }),
+    });
+    return {
+      scale,
+      state: 'calibrated',
+      cutoff: saved.cutoff,
+      savedAt: saved.savedAt,
+      ...(saved.note ? { note: saved.note } : {}),
+      suggestion: `Optionally check the cutoff with a probe the user has not rated: ${unratedProbe[scale]}, and recalibrate if the user disagrees with the results.`,
+    };
   }
 
   private async validate(
@@ -159,7 +288,8 @@ export class Discovery {
       for (const [index, queue] of queues.entries()) {
         while (queue.length) {
           const row = queue.shift()!;
-          if (seen.has(row.item_id) || row.distance! > maxDistance) continue;
+          if (seen.has(row.item_id) || !meetsCutoff('similarity', row.distance!, maxDistance))
+            continue;
           const base = recordingTitle(row.title);
           const sameTitle = originals.filter((original) => recordingTitle(original.title) === base);
           if (
@@ -280,7 +410,7 @@ export class Discovery {
         ? source.entries
         : source.entries.filter((entry) => !entry.recommendation || entry.recommendation.retained);
     const capacity = Math.max(0, 500 - base.length);
-    const { signal, calibration } = await this.start();
+    const { signal, cutoff } = await this.start('similarity');
     const result = await this.recommend(
       references,
       Math.min(target, capacity),
@@ -288,7 +418,7 @@ export class Discovery {
       originals,
       input.allowAlternateVersions,
       signal,
-      calibration.maxDistance,
+      cutoff,
     );
     if (signal.aborted)
       throw new Problem(
@@ -356,7 +486,7 @@ export class Discovery {
         : source.entries.filter((e) => !e.recommendation || e.recommendation.retained);
     const target = input.count ?? Math.min(20, references.length);
     const capacity = Math.max(0, 500 - base.length);
-    const { signal, calibration } = await this.start();
+    const { signal, cutoff } = await this.start('similarity');
     const result = await this.recommend(
       references,
       Math.min(target, capacity),
@@ -368,7 +498,7 @@ export class Discovery {
       [...references, ...base.flatMap((e) => (e.track && !e.omit ? [e.track] : []))],
       input.allowAlternateVersions,
       signal,
-      calibration.maxDistance,
+      cutoff,
     );
     if (signal.aborted)
       throw new Problem('discovery_timeout', 'Discovery deadline exhausted; draft unchanged.');
@@ -410,7 +540,7 @@ export class Discovery {
     count: number,
     allowAlternateVersions: boolean,
   ): Promise<DiscoveryResult> {
-    const { signal, calibration } = await this.start();
+    const { signal, cutoff } = await this.start('similarity');
     const reference = await this.navidrome.getSong(trackId, signal);
     return this.recommend(
       [reference],
@@ -419,12 +549,35 @@ export class Discovery {
       [reference],
       allowAlternateVersions,
       signal,
-      calibration.maxDistance,
+      cutoff,
     );
   }
 
   async describe(description: string, count: number): Promise<DiscoveryResult> {
-    const { signal, calibration } = await this.start();
+    const { signal, cutoff } = await this.start('description');
+    const results = await this.search(description, signal);
+    const recommendations: RecommendedTrack[] = [];
+    const seen = new Set<string>();
+    for (const row of results) {
+      if (!meetsCutoff('description', row.similarity, cutoff) || seen.has(row.item_id)) continue;
+      recommendations.push(await this.validate(row, signal, 'description'));
+      seen.add(row.item_id);
+      if (recommendations.length === count) break;
+    }
+    return {
+      recommendations,
+      target: count,
+      shortfall: count - recommendations.length,
+      candidateLimitReached: results.length === 200,
+      warnings: [],
+    };
+  }
+
+  /** Description-search rows for a listening description, most similar first. */
+  private async search(
+    description: string,
+    signal: AbortSignal,
+  ): Promise<(Row & { similarity: number })[]> {
     const body = await this.audiomuse.request('/api/clap/search', signal, {
       query: description,
       limit: 200,
@@ -437,20 +590,43 @@ export class Discovery {
         'audiomuse_error',
         'AudioMuse returned invalid description-search results.',
       );
-    const recommendations: RecommendedTrack[] = [];
-    const seen = new Set<string>();
-    for (const row of parsed.data.results.sort((a, b) => b.similarity - a.similarity)) {
-      if (row.similarity < calibration.minDescriptionSimilarity || seen.has(row.item_id)) continue;
-      recommendations.push(await this.validate(row, signal, 'description'));
-      seen.add(row.item_id);
-      if (recommendations.length === count) break;
+    return parsed.data.results.sort((a, b) => b.similarity - a.similarity);
+  }
+
+  /**
+   * Collects one page of a calibration probe's candidates with raw scores, before
+   * any quality cutoff applies. Each candidate is validated against the library.
+   */
+  async collect(
+    input: ToolInput<'collect_calibration_candidates'>,
+  ): Promise<ToolData['collect_calibration_candidates']> {
+    const { scale, probe, offset, count } = input;
+    const { signal } = await this.connect();
+    const end = Math.min(200, offset + count);
+    let rows: Row[];
+    if (scale === 'similarity') {
+      const track = await this.navidrome.getSong(probe, signal);
+      // Two extra rows allow for AudioMuse returning the probe itself and show
+      // whether the list continues past this page.
+      rows = (await this.neighbors(track, Math.min(200, end + 2), signal)).filter(
+        (row) => row.item_id !== probe,
+      );
+    } else rows = await this.search(probe, signal);
+    // Keep each candidate's first (closest) row.
+    const unique = new Map<string, Row>();
+    for (const row of rows) if (!unique.has(row.item_id)) unique.set(row.item_id, row);
+    rows = [...unique.values()];
+    const candidates = [];
+    for (const row of rows.slice(offset, end)) {
+      const { track, recommendation } = await this.validate(row, signal, scale);
+      candidates.push({ track, score: recommendation.score });
     }
     return {
-      recommendations,
-      target: count,
-      shortfall: count - recommendations.length,
-      candidateLimitReached: parsed.data.results.length === 200,
-      warnings: [],
+      scale,
+      probe,
+      offset,
+      candidates,
+      ...(rows.length > end && end < 200 ? { nextOffset: end } : {}),
     };
   }
 }

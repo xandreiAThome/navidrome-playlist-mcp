@@ -69,13 +69,43 @@ const tools: { name: ToolName; readOnly: boolean; description: string }[] = [
     name: 'find_similar_tracks',
     readOnly: true,
     description:
-      'Recommend tracks similar to one library track, with a calibrated quality floor and alternate-version filtering. Ambiguous analysis failures are errors, not shortages.',
+      'Recommend tracks similar to one library track that meet the similarity quality cutoff, with alternate-version filtering. Ambiguous analysis failures are errors, not shortages.',
   },
   {
     name: 'check_audiomuse_connection',
     readOnly: true,
     description:
-      'Check optional AudioMuse authentication, version, and calibration configuration. Does not analyze the library.',
+      'Check optional AudioMuse authentication, version, and each scale’s calibration (similarity, description): calibrated with its quality cutoff, missing, or stale with the changes that made it stale. Recalibrate a missing or stale scale before using it. Does not analyze the library.',
+  },
+  {
+    name: 'reset_calibration',
+    readOnly: false,
+    description:
+      'Mark one scale’s calibration stale after an AudioMuse model or index change that cannot be detected, so recommendations on that scale report calibration_required until it is recalibrated. Starts fresh calibration ratings when a calibration was saved; earlier ratings and calibrations are kept as history. Only reset when the user reports such a change.',
+  },
+  {
+    name: 'collect_calibration_candidates',
+    readOnly: true,
+    description:
+      'Collect candidates for a calibration probe: a library track ID (similarity scale) or a listening description (description scale). Works before calibration and returns raw scores (distance, lower is closer; similarity, higher is closer) with no quality cutoff, each validated against the library. Have the user listen in Navidrome and rate each candidate good or poor. When evidence is short, such as no poor rating yet, use nextOffset to collect further down the list or try another probe.',
+  },
+  {
+    name: 'record_calibration_ratings',
+    readOnly: false,
+    description:
+      "Record the user's good or poor calibration ratings for one probe, echoing each candidate's trackId, title, artist, and score as collected. Ratings are trusted as the user's own judgment; record only what the user said after listening. Re-rating a candidate replaces its rating. Returns the scale's ratings collected toward the next calibration, in the same trackId, title, and artist terms. Local only.",
+  },
+  {
+    name: 'propose_calibration',
+    readOnly: true,
+    description:
+      'Propose a quality cutoff for one scale from its recorded ratings without saving it. Similarity: the largest good distance below the smallest poor distance; description: the smallest good similarity above the largest poor similarity; cutoffs are inclusive. Needs at least one good and one poor rating across at least three probes; when the result is insufficient, collect candidates further down the list or for another probe and propose again. Show the user which rated candidates the cutoff accepts and rejects, and save it only after they agree. Local only.',
+  },
+  {
+    name: 'save_calibration',
+    readOnly: false,
+    description:
+      'Save a quality cutoff for one scale, bound to the live AudioMuse URL, selected server, Navidrome URL, and release. With evidence "ratings", save exactly the cutoff propose_calibration returned after the user agreed; it is rejected if the proposal changed. With evidence "note", save an explicit cutoff without ratings, such as one moved from an old calibration file, recording where it came from in note. Saving from ratings starts fresh ratings; a note leaves ratings in progress counting toward the next proposal. Afterwards, suggest (do not require) testing recommendations for a probe the user has not rated.',
   },
   {
     name: 'discover_tracks',
@@ -171,12 +201,17 @@ export function createMcpServer(service: PlaylistService): McpServer {
               'publish_playlist',
               'reconcile_operation',
               'expand_playlist_draft',
+              'reset_calibration',
+              'record_calibration_ratings',
             ].includes(tool.name),
           openWorldHint: ![
             'get_playlist_draft',
             'get_operation',
             'copy_playlist_draft',
             'preview_playlist',
+            'reset_calibration',
+            'record_calibration_ratings',
+            'propose_calibration',
           ].includes(tool.name),
         },
       },
