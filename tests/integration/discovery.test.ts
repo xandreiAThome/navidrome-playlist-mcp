@@ -32,7 +32,11 @@ test('AudioMuse is optional and authenticated connectivity failures do not expos
   t.onTestFinished(() => service.close());
   assert.deepEqual(await service.execute('check_audiomuse_connection', {}), {
     status: 'ok',
-    data: { connected: true, version: 'v3.7.4', calibrated: false },
+    data: {
+      connected: true,
+      version: 'v3.7.4',
+      calibration: { similarity: { state: 'missing' }, description: { state: 'missing' } },
+    },
   });
   audio.controls.fail = true;
   const result = await service.execute('check_audiomuse_connection', {});
@@ -405,7 +409,14 @@ test('environment configuration enables AudioMuse without embedding credentials 
   t.onTestFinished(() => service.close());
   assert.deepEqual(await service.execute('check_audiomuse_connection', {}), {
     status: 'ok',
-    data: { connected: true, calibrated: true, version: 'v3.7.4' },
+    data: {
+      connected: true,
+      version: 'v3.7.4',
+      calibration: {
+        similarity: { state: 'calibrated', cutoff: 0.3 },
+        description: { state: 'calibrated', cutoff: 0.7 },
+      },
+    },
   });
 });
 
@@ -1058,7 +1069,14 @@ test('a deployment outside the supported minor release or with a malformed versi
   audio.controls.version = 'v3.7.0';
   assert.deepEqual(await run('check_audiomuse_connection'), {
     status: 'ok',
-    data: { connected: true, calibrated: true, version: 'v3.7.0' },
+    data: {
+      connected: true,
+      version: 'v3.7.0',
+      calibration: {
+        similarity: { state: 'calibrated', cutoff: 0.3 },
+        description: { state: 'calibrated', cutoff: 0.7 },
+      },
+    },
   });
   audio.controls.version = 'v3.8.0';
   for (const name of ['check_audiomuse_connection', 'discover_tracks'] as const) {

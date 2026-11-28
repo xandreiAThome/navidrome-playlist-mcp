@@ -112,6 +112,34 @@ test('discovery applies each stored cutoff inclusively', async (t) => {
   }
 });
 
+const status = async (service: ReturnType<typeof createApp>) => {
+  const result = await service.execute('check_audiomuse_connection', {});
+  assert.equal(result.status, 'ok', JSON.stringify(result));
+  return result.data!.calibration;
+};
+
+test('connection status reports each scale as missing, calibrated with its cutoff, or stale with its reasons', async (t) => {
+  const { seed, start } = await discoveryFixture(t);
+  const before = start();
+  assert.deepEqual(await before.execute('check_audiomuse_connection', {}), {
+    status: 'ok',
+    data: {
+      connected: true,
+      version: 'v3.7.4',
+      calibration: { similarity: { state: 'missing' }, description: { state: 'missing' } },
+    },
+  });
+  before.close();
+  seed([
+    { scale: 'similarity', cutoff: 0.3 },
+    { scale: 'description', cutoff: 0.7, binding: { server: 'jellyfin' } },
+  ]);
+  assert.deepEqual(await status(start()), {
+    similarity: { state: 'calibrated', cutoff: 0.3 },
+    description: { state: 'stale', cutoff: 0.7, changes: ['server'] },
+  });
+});
+
 test('a calibration is stale when a bound field or the minor release changes, but not on a patch release', async (t) => {
   const cases: [Partial<CalibrationBinding>, string[]][] = [
     [{ audiomuseUrl: 'http://elsewhere.test' }, ['audiomuseUrl']],
@@ -123,36 +151,84 @@ test('a calibration is stale when a bound field or the minor release changes, bu
   for (const [binding, changes] of cases) {
     const { seed, start } = await discoveryFixture(t);
     seed([{ scale: 'similarity', cutoff: 0.3, binding }]);
-    assert.deepEqual(await start().execute('find_similar_tracks', similar), {
+    const service = start();
+    assert.deepEqual(await service.execute('find_similar_tracks', similar), {
       status: 'calibration_required',
       message:
         'The similarity calibration is stale for this deployment; recalibrate the similarity scale.',
       details: { scale: 'similarity', reason: 'stale', changes },
     });
+    assert.deepEqual((await status(service)).similarity, { state: 'stale', cutoff: 0.3, changes });
   }
   const { seed, start, audio } = await discoveryFixture(t);
   seed([{ scale: 'similarity', cutoff: 0.3, binding: { release: 'v3.7.1' } }]);
   audio.controls.version = 'v3.7.9';
-  assert.equal((await start().execute('find_similar_tracks', similar)).status, 'ok');
-});
-
-test('a reset scale is stale until recalibrated, and calibration survives restarts', async (t) => {
-  const { seed, start } = await discoveryFixture(t);
-  seed(
-    [
-      { scale: 'similarity', cutoff: 0.3 },
-      { scale: 'description', cutoff: 0.7 },
-    ],
-    ['description'],
-  );
   const service = start();
   assert.equal((await service.execute('find_similar_tracks', similar)).status, 'ok');
-  const reset = await service.execute('discover_tracks', describe);
-  assert(reset.status !== 'ok');
-  assert.deepEqual(reset.details, { scale: 'description', reason: 'stale', changes: ['reset'] });
+  assert.deepEqual((await status(service)).similarity, { state: 'calibrated', cutoff: 0.3 });
+});
+
+test('resetting a scale makes it stale until recalibrated, keeping its ratings as history', async (t) => {
+  const { seed, start, config } = await discoveryFixture(t);
+  const storage = new Storage(config);
+  storage.recordCalibrationRatings('description', [
+    {
+      probe: 'rainy day',
+      itemId: 'other',
+      title: 'Teardrop',
+      author: 'Massive Attack',
+      score: 0.8,
+      rating: 'good',
+    },
+  ]);
+  storage.close();
+  seed([
+    { scale: 'similarity', cutoff: 0.3 },
+    { scale: 'description', cutoff: 0.7 },
+  ]);
+  const service = start();
+  const reset = await service.execute('reset_calibration', { scale: 'description' });
+  assert.equal(reset.status, 'ok', JSON.stringify(reset));
+  assert(reset.data?.state === 'stale');
+  const { resetAt, ...rest } = reset.data;
+  assert.deepEqual(rest, { scale: 'description', state: 'stale', cutoff: 0.7 });
+  assert.equal(typeof resetAt, 'string');
+  assert.equal((await service.execute('find_similar_tracks', similar)).status, 'ok');
+  const stale = await service.execute('discover_tracks', describe);
+  assert(stale.status !== 'ok');
+  assert.deepEqual(stale.details, { scale: 'description', reason: 'stale', changes: ['reset'] });
+  assert.deepEqual(await status(service), {
+    similarity: { state: 'calibrated', cutoff: 0.3 },
+    description: { state: 'stale', cutoff: 0.7, changes: ['reset'] },
+  });
   service.close();
-  seed([{ scale: 'description', cutoff: 0.7 }]);
-  assert.equal((await start().execute('discover_tracks', describe)).status, 'ok');
+
+  seed([{ scale: 'description', cutoff: 0.75 }]);
+  const recalibrated = start();
+  assert.equal((await recalibrated.execute('discover_tracks', describe)).status, 'ok');
+  assert.deepEqual((await status(recalibrated)).description, { state: 'calibrated', cutoff: 0.75 });
+  recalibrated.close();
+  const history = new Storage(config);
+  t.onTestFinished(() => history.close());
+  const [current, previous] = history.calibrationHistory('description');
+  assert.equal(current?.cutoff, 0.75);
+  assert.equal(previous?.resetAt, resetAt);
+  assert.deepEqual(
+    history.calibrationRatings('description', previous!.epoch).map((r) => r.probe),
+    ['rainy day'],
+  );
+});
+
+test('resetting an uncalibrated scale reports it missing', async (t) => {
+  const { start } = await discoveryFixture(t);
+  assert.deepEqual(await start().execute('reset_calibration', { scale: 'similarity' }), {
+    status: 'ok',
+    data: { scale: 'similarity', state: 'missing' },
+  });
+  assert.equal(
+    (await start().execute('reset_calibration', { scale: 'tempo' })).status,
+    'invalid_input',
+  );
 });
 
 const binding = {
